@@ -1,0 +1,1680 @@
+<!DOCTYPE html>
+<!-- HUSH ARCHIVE 2.0: un solo archivo. Todo el sonido se sintetiza en vivo con Web Audio (sin muestras).
+     Novedades v2.0: ruido con forma de voz (LTASS), escudo de 5 bandas con presets, calibración por micrófono,
+     enmascaramiento adaptativo, textura viva, controles de pantalla de bloqueo (Media Session) y pantalla encendida (Wake Lock). -->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1a1109">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="Máquina de ruido para concentrarse en la oficina: enmascara las conversaciones de otras oficinas. Todo se genera en el dispositivo.">
+<title>HUSH ARCHIVE 2.0 — modo oficina</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=IBM+Plex+Mono:wght@400;500&family=Schibsted+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* Design tokens: base palette and font stacks */
+:root{
+  --bg:#1a1109; --panel:#251912; --line:rgba(243,228,213,.11);
+  --ink:#f3e7da; --muted:#a88e7c; --faint:#6f5b4e;
+  --serif:"Fraunces",serif; --sans:"Schibsted Grotesk",sans-serif; --mono:"IBM Plex Mono",monospace;
+}
+/* Per-mode accents; --glow is an R,G,B triplet used inside rgba() */
+body[data-mode="pink"]{ --acc:#f293a9; --acc2:#f7c2cd; --acc-ink:#2b0f16; --glow:242,147,169; }
+body[data-mode="brown"]{ --acc:#d29a5e; --acc2:#e9c294; --acc-ink:#241206; --glow:210,154,94; }
+body[data-mode="office"]{ --acc:#e5977f; --acc2:#f0bfae; --acc-ink:#2a110b; --glow:229,151,127; }
+
+/* Reset */
+*{margin:0;padding:0;box-sizing:border-box}
+/* Smooth in-page scrolling (turned off below for reduced motion) */
+html{scroll-behavior:smooth}
+/* Page base: dark background, light text */
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--sans);
+  font-size:16px; line-height:1.55; overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+/* Selected text takes the active accent */
+::selection{background:var(--acc);color:var(--acc-ink)}
+/* Visible keyboard focus ring (accessibility) */
+:focus-visible{outline:2px solid var(--acc);outline-offset:3px;border-radius:6px}
+/* Utility: monospace face for labels and readouts */
+.mono{font-family:var(--mono)}
+/* Buttons inherit page type and drop native chrome */
+button{font-family:inherit;color:inherit;background:none;border:0;cursor:pointer;user-select:none;-webkit-user-select:none}
+
+/* Fixed decorative layer: colour glows + vignette */
+.bg{position:fixed;inset:0;z-index:0;pointer-events:none}
+/* Large blurred colour blob, hidden until its mode is active */
+.glow{position:fixed;width:75vmax;height:75vmax;border-radius:50%;opacity:0;transition:opacity 1.6s ease}
+/* Pink glow: top left, slow drift */
+.glow-pink{top:-28vmax;left:-18vmax;background:radial-gradient(circle,rgba(242,147,169,.15),transparent 62%);animation:drift 28s ease-in-out infinite alternate}
+/* Brown glow: bottom right, drifts the other way */
+.glow-brown{bottom:-28vmax;right:-18vmax;background:radial-gradient(circle,rgba(210,154,94,.14),transparent 62%);animation:drift 34s ease-in-out infinite alternate-reverse}
+/* Show the glow(s) of the active mode; office shows both */
+body[data-mode="pink"] .glow-pink{opacity:1}
+body[data-mode="brown"] .glow-brown{opacity:1}
+body[data-mode="office"] .glow-pink,body[data-mode="office"] .glow-brown{opacity:1}
+/* Slow floating motion for the glows */
+@keyframes drift{to{transform:translate(5vmax,4vmax) scale(1.08)}}
+/* Darkens the edges to focus the centre */
+.vignette{position:fixed;inset:0;background:radial-gradient(ellipse at 50% 40%,transparent 50%,rgba(8,4,2,.55))}
+/* Film-grain overlay from inline SVG noise, very faint */
+.grain{
+  position:fixed;inset:-120px;z-index:5;pointer-events:none;opacity:.05;mix-blend-mode:soft-light;
+  background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/></filter><rect width="300" height="300" filter="url(%23n)"/></svg>');
+  animation:grain .9s steps(4) infinite;
+}
+/* Jitter the grain tile so it shimmers */
+@keyframes grain{0%{transform:translate(0,0)}25%{transform:translate(-32px,22px)}50%{transform:translate(22px,-26px)}75%{transform:translate(-14px,-12px)}100%{transform:translate(0,0)}}
+
+/* Keep real content above the background layers */
+header,main,footer{position:relative;z-index:2}
+
+/* Top bar: brand left, status right */
+.top{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px 5vw;border-bottom:1px solid var(--line)}
+/* Logo and name */
+.brand{display:flex;align-items:center;gap:12px;font-family:var(--mono);font-size:12px;letter-spacing:.24em}
+/* Logo takes the accent colour */
+.brand svg{width:22px;height:22px;stroke:var(--acc);fill:none;stroke-width:1.6;transition:stroke .8s}
+/* Tagline next to the name */
+.brand-sub{color:var(--faint);letter-spacing:.14em;font-size:10px;margin-left:6px}
+/* Status cluster: badge + LED */
+.top-right{display:flex;align-items:center;gap:14px;font-family:var(--mono);font-size:10px;letter-spacing:.18em;color:var(--muted)}
+/* Pill-shaped info badge */
+.badge{border:1px solid var(--line);border-radius:999px;padding:5px 12px;color:var(--faint)}
+/* LED and its label */
+.led-wrap{display:flex;align-items:center;gap:8px}
+/* Status LED, grey while idle */
+.led{width:8px;height:8px;border-radius:50%;background:var(--faint);transition:background .5s,box-shadow .5s}
+/* Playing: LED lights up in the accent colour */
+body.playing .led{background:var(--acc);box-shadow:0 0 12px rgba(var(--glow),.9)}
+
+/* Hero: oscilloscope backdrop, player and control deck */
+.stage{position:relative;min-height:calc(100svh - 58px);overflow:hidden;display:flex;flex-direction:column;padding:36px 5vw 30px}
+/* Oscilloscope canvas fills the hero, behind the content */
+#scope{position:absolute;inset:0;width:100%;height:100%}
+/* Two columns: player (left) and control deck (right) */
+.stage-grid{position:relative;z-index:2;flex:1;width:100%;max-width:1240px;margin:0 auto;display:grid;grid-template-columns:1.05fr .9fr;gap:clamp(28px,4vw,64px);align-items:center}
+/* Small label above the big word */
+.kicker{font-size:11px;letter-spacing:.32em;color:var(--muted);display:flex;align-items:center;gap:10px}
+/* Accent dash before the label */
+.kicker::before{content:"";width:26px;height:1px;background:var(--acc);transition:background .8s}
+/* Mode name in large italic display type */
+.big-word{font-family:var(--serif);font-style:italic;font-weight:350;font-size:clamp(3.6rem,8.5vw,7.2rem);line-height:.95;letter-spacing:-.02em;margin:14px 0 6px}
+/* Letters start lowered and blurred, then rise in (staggered by --i) */
+.big-word span{display:inline-block;transform:translateY(.45em);opacity:0;filter:blur(4px);
+  transition:transform .55s cubic-bezier(.2,.7,.2,1),opacity .55s,filter .55s;
+  transition-delay:calc(var(--i)*50ms)}
+/* End state of the letter reveal */
+.big-word.go span{transform:none;opacity:1;filter:blur(0)}
+/* Trailing full stop takes the accent colour */
+.big-word .dot{color:var(--acc);transition:color .8s,transform .55s cubic-bezier(.2,.7,.2,1),opacity .55s,filter .55s}
+/* One-line description of the current mode */
+.sub-line{color:var(--muted);max-width:42ch;font-size:15px}
+
+/* Holds the play button, ripple rings and countdown ring */
+.play-wrap{position:relative;width:250px;height:250px;margin:26px auto 4px;display:grid;place-items:center}
+/* Large round play/pause button with a slow breathing animation */
+.play-btn{position:relative;width:206px;height:206px;border-radius:50%;z-index:2;
+  background:radial-gradient(circle at 35% 30%,rgba(var(--glow),.2),transparent 60%),var(--panel);
+  border:1px solid rgba(var(--glow),.4);display:grid;place-items:center;
+  transition:transform .35s cubic-bezier(.2,.7,.2,1),border-color .8s,box-shadow .5s;
+  animation:breathe 5s ease-in-out infinite}
+/* Barely perceptible scale pulse */
+@keyframes breathe{50%{transform:scale(1.015)}}
+/* Hover: grow slightly and glow */
+.play-btn:hover{transform:scale(1.04);box-shadow:0 0 70px rgba(var(--glow),.28)}
+/* Playing: accent border and stronger glow */
+body.playing .play-btn{border-color:var(--acc);box-shadow:0 0 90px rgba(var(--glow),.32)}
+/* Play and pause icons stacked on top of each other */
+.ic{position:absolute;width:56px;height:56px;fill:var(--ink);transition:transform .4s cubic-bezier(.2,.7,.2,1),opacity .4s}
+/* Pause icon hidden until playing */
+.ic-pause{transform:scale(.6);opacity:0}
+/* Playing: hide the play icon */
+body.playing .ic-play{transform:scale(.6);opacity:0}
+/* Playing: show the pause icon */
+body.playing .ic-pause{transform:scale(1);opacity:1}
+/* Ripple ring around the button, paused while idle */
+.ring{position:absolute;width:206px;height:206px;border-radius:50%;border:1px solid rgba(var(--glow),.5);opacity:0;
+  animation:ripple 3s linear infinite;animation-play-state:paused}
+/* Run the ripple only while playing */
+body.playing .ring{animation-play-state:running}
+/* Stagger the three rings */
+.ring:nth-child(2){animation-delay:1s}
+.ring:nth-child(3){animation-delay:2s}
+/* Ring expands and fades out */
+@keyframes ripple{0%{transform:scale(1);opacity:.55}100%{transform:scale(1.45);opacity:0}}
+/* Countdown ring, rotated so it starts at 12 o'clock */
+.timer-ring{position:absolute;inset:0;width:250px;height:250px;transform:rotate(-90deg);opacity:0;transition:opacity .5s}
+/* Reveal the ring when a countdown is armed */
+.timer-ring.show{opacity:1}
+/* Ring progress stroke (pathLength=100, so dashoffset is a percentage) */
+#ringFg{fill:none;stroke:var(--acc);stroke-width:2.5;stroke-linecap:round;stroke-dasharray:100;stroke-dashoffset:100;transition:stroke .8s}
+/* Elapsed play time */
+.elapsed{position:relative;z-index:2;text-align:center;font-size:14px;letter-spacing:.14em;color:var(--muted)}
+/* Status line with the equalizer bars */
+.status{display:flex;align-items:center;gap:12px;justify-content:center;margin-top:14px;font-size:11px;letter-spacing:.2em;color:var(--muted)}
+/* Tiny three-bar equalizer */
+.eq{display:flex;gap:2px;align-items:flex-end;height:12px}
+/* Each bar scales from its base */
+.eq i{width:3px;height:12px;background:var(--acc);transform-origin:bottom;transform:scaleY(.25);transition:background .8s}
+/* Animate the bars only while playing */
+body.playing .eq i{animation:eq .9s ease-in-out infinite}
+body.playing .eq i:nth-child(2){animation-delay:.22s}
+body.playing .eq i:nth-child(3){animation-delay:.44s}
+/* Bar height oscillation */
+@keyframes eq{0%,100%{transform:scaleY(.25)}50%{transform:scaleY(1)}}
+
+/* Control deck panel */
+.console{background:linear-gradient(180deg,rgba(255,235,215,.035),transparent 40%),var(--panel);
+  border:1px solid var(--line);border-radius:16px;padding:20px 22px 8px;
+  box-shadow:0 34px 70px -34px rgba(0,0,0,.65)}
+/* Deck header */
+.console-head{display:flex;justify-content:space-between;align-items:center;font-size:11px;letter-spacing:.3em;color:var(--muted);padding-bottom:14px;border-bottom:1px solid var(--line)}
+/* Header dot, grey while idle */
+.console-head .dot{width:8px;height:8px;border-radius:50%;background:var(--faint);transition:.5s}
+/* Playing: accent colour and pulse */
+body.playing .console-head .dot{background:var(--acc);animation:dpulse 2s ease-in-out infinite}
+/* Glow pulse for the header dot */
+@keyframes dpulse{50%{box-shadow:0 0 14px rgba(var(--glow),.9)}}
+/* One control group inside the deck */
+.ctl{padding:18px 0;border-top:1px solid var(--line)}
+/* No divider above the first group */
+.ctl:first-of-type{border-top:0}
+/* Group title */
+.ctl-label{font-size:10px;letter-spacing:.3em;color:var(--faint);margin-bottom:12px}
+/* Label on the left, readout on the right */
+.row-between{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+/* Small helper text */
+.hint{font-size:10px;letter-spacing:.12em;color:var(--faint)}
+/* Live value readout in the accent colour */
+.readout{font-size:13px;color:var(--acc2);transition:color .8s}
+
+/* Mode buttons in a two-column grid */
+.mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+/* Mode button; --mc is its colour, --mb its tint */
+.mode-btn{--mc:#999;--mb:transparent;text-align:left;padding:13px 15px 12px;border:1px solid var(--line);border-radius:12px;
+  display:flex;flex-direction:column;gap:7px;color:var(--muted);
+  transition:border-color .35s,background .35s,color .35s,transform .35s}
+/* Hover: lift and brighten */
+.mode-btn:hover{border-color:rgba(var(--glow),.5);color:var(--ink);transform:translateY(-2px)}
+/* Per-mode button colours */
+.mode-btn[data-m="pink"]{--mc:#f293a9;--mb:rgba(242,147,169,.09)}
+.mode-btn[data-m="brown"]{--mc:#d29a5e;--mb:rgba(210,154,94,.09)}
+/* Office spans both columns (full width) */
+.mode-btn[data-m="office"]{--mc:#e5977f;--mb:rgba(229,151,127,.09);grid-column:1/-1}
+/* Active mode: coloured border and tint */
+.mode-btn.active{border-color:var(--mc);background:var(--mb);color:var(--ink)}
+/* Button title row */
+.mb-top{display:flex;justify-content:space-between;align-items:baseline}
+/* Mode name in the serif face */
+.mb-name{font-family:var(--serif);font-size:1.45rem;font-weight:450}
+/* LIVE tag, visible only on the active mode */
+.mb-live{font-family:var(--mono);font-size:9px;letter-spacing:.16em;background:var(--mc);color:#1d120b;padding:2px 7px;border-radius:999px;opacity:0;transform:translateY(3px);transition:.35s}
+/* Show the LIVE tag on the active button */
+.mode-btn.active .mb-live{opacity:1;transform:none}
+/* Button subtitle */
+.mb-sub{font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--faint)}
+/* Mini slope sketch inside the button */
+.mb-spark{width:58px;height:16px;overflow:visible}
+/* Sketch line in the mode colour */
+.mb-spark path{fill:none;stroke:var(--mc);stroke-width:2;opacity:.85}
+/* Office sketch: thin pink guide */
+.mb-spark-mix .p{stroke:#f293a9;stroke-width:1.2;opacity:.55}
+/* Office sketch: thin brown guide */
+.mb-spark-mix .b{stroke:#d29a5e;stroke-width:1.2;opacity:.55}
+/* Office sketch: the blend line, thicker */
+.mb-spark-mix .m{stroke-width:2.4;opacity:1}
+
+/* Custom range slider: shared base */
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:26px;background:transparent;cursor:pointer}
+/* WebKit/Blink track; --fill paints the filled part */
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;
+  background:linear-gradient(90deg,var(--acc) var(--fill,40%),rgba(243,228,213,.14) var(--fill,40%))}
+/* WebKit/Blink thumb */
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;
+  background:var(--acc);border:3px solid #1d130c;margin-top:-6px;box-shadow:0 0 0 0 rgba(var(--glow),.15);transition:box-shadow .3s}
+/* Halo around the thumb on hover */
+input[type=range]::-webkit-slider-thumb:hover{box-shadow:0 0 0 8px rgba(var(--glow),.18)}
+/* Firefox track */
+input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:rgba(243,228,213,.14)}
+/* Firefox filled part */
+input[type=range]::-moz-range-progress{height:4px;border-radius:2px;background:var(--acc)}
+/* Firefox thumb */
+input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:var(--acc);border:3px solid #1d130c}
+/* Min/max captions under a slider */
+.slider-meta{display:flex;justify-content:space-between;margin-top:6px;font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:var(--faint)}
+/* Pill that flags the hard output cap */
+.cap-flag{border:1px solid rgba(var(--glow),.5);color:var(--acc2);border-radius:999px;padding:2px 8px;transition:.8s}
+
+/* office blend control: only visible (and focusable) in office mode */
+.blend{max-height:0;opacity:0;visibility:hidden;overflow:hidden;margin-top:0;
+  transition:max-height .5s cubic-bezier(.2,.7,.2,1),opacity .35s,margin-top .5s,visibility 0s linear .5s}
+body[data-mode="office"] .blend{max-height:110px;opacity:1;visibility:visible;margin-top:16px;
+  transition:max-height .5s cubic-bezier(.2,.7,.2,1),opacity .5s .1s,margin-top .5s,visibility 0s}
+/* Inner padding so focus rings are not clipped by overflow:hidden */
+.blend-in{padding:6px 2px 2px}
+
+/* Row of countdown chips */
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+/* Countdown chip */
+.chip{font-family:var(--mono);font-size:11px;letter-spacing:.1em;padding:8px 14px;border:1px solid var(--line);border-radius:999px;color:var(--muted);
+  transition:border-color .3s,color .3s,background .3s,transform .3s}
+/* Chip hover */
+.chip:hover{border-color:var(--acc);color:var(--ink);transform:translateY(-1px)}
+/* Chip for the armed countdown */
+.chip.active{background:var(--acc);border-color:var(--acc);color:var(--acc-ink);font-weight:500}
+/* Countdown status text */
+.cd-line{font-size:11px;color:var(--muted);margin-top:10px;letter-spacing:.08em}
+
+/* Level meters + caption */
+.monitor-row{display:flex;align-items:center;gap:18px}
+/* Pair of meters (left, right) */
+.meters{display:flex;gap:6px}
+/* One vertical meter track */
+.meter{width:10px;height:38px;background:rgba(243,228,213,.08);border-radius:3px;overflow:hidden;position:relative}
+/* Meter fill, scaled from JS */
+.meter i{position:absolute;inset:0;background:linear-gradient(180deg,var(--acc),rgba(var(--glow),.35));transform:scaleY(0);transform-origin:bottom}
+/* Monitor caption */
+.mon-txt{display:flex;flex-direction:column;gap:2px}
+/* Caption title */
+.mon-txt span:first-child{font-size:10px;letter-spacing:.22em;color:var(--muted)}
+/* Caption subtitle */
+.mon-txt span:last-child{font-size:11px;color:var(--faint)}
+
+/* Hero footer: capabilities and shortcuts */
+.stage-foot{position:relative;z-index:2;width:100%;max-width:1240px;margin:26px auto 0;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;
+  font-family:var(--mono);font-size:10px;letter-spacing:.18em;color:var(--faint)}
+
+/* Content sections below the hero */
+section.block{padding:96px 5vw}
+/* Centred content column */
+.inner{max-width:1240px;margin:0 auto}
+/* Section label */
+.sec-kicker{font-family:var(--mono);font-size:11px;letter-spacing:.32em;color:var(--muted);display:flex;align-items:center;gap:12px}
+/* Accent dash before the label */
+.sec-kicker::before{content:"";width:34px;height:1px;background:var(--acc);transition:background .8s}
+/* Section heading */
+h2{font-family:var(--serif);font-weight:420;font-size:clamp(2rem,4vw,3.2rem);line-height:1.08;margin:14px 0 8px}
+/* Emphasised heading word takes the accent */
+h2 em{font-style:italic;color:var(--acc);transition:color .8s}
+
+/* Chart (left) and explanations (right) */
+.spectrum-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:clamp(28px,4vw,56px);margin-top:36px;align-items:start}
+/* Framed card around the spectrum chart */
+.diagram{border:1px solid var(--line);border-radius:16px;background:var(--panel);padding:16px}
+/* Chart scales with its container */
+.diagram svg{width:100%;height:auto;display:block}
+/* Axis tick labels */
+.axis{font-family:var(--mono);font-size:10px;fill:var(--faint)}
+/* Faint chart grid */
+.grid-line{stroke:rgba(243,228,213,.07)}
+/* Spectrum line; dasharray/dashoffset of 1 hides it until revealed (pathLength=1) */
+.line{fill:none;stroke-width:2.5;stroke-dasharray:1;stroke-dashoffset:1;cursor:pointer;
+  transition:stroke-dashoffset 1.6s cubic-bezier(.3,0,.2,1),stroke-width .3s,filter .3s}
+/* On reveal, the line draws itself in */
+.reveal.in .line{stroke-dashoffset:0}
+/* Per-line colours and draw-in delays */
+.l-white{stroke:var(--faint);transition-delay:.9s}
+/* Pink line */
+.l-pink{stroke:#f293a9;transition-delay:.35s}
+/* Brown line */
+.l-brown{stroke:#d29a5e;transition-delay:.65s}
+/* Hover: thicken and glow */
+.line:hover{stroke-width:4;filter:drop-shadow(0 0 6px currentColor)}
+/* currentColor feeds the hover glow */
+.l-pink{color:#f293a9}.l-brown{color:#d29a5e}
+/* Office line: accent colour, draws in after pink */
+.l-office{stroke:#e5977f;color:#e5977f;transition-delay:.5s}
+/* Line labels; paint-order draws a dark halo behind the text */
+.end-lbl{font-family:var(--mono);font-size:10px;letter-spacing:.08em;paint-order:stroke;stroke:#251912;stroke-width:5px;stroke-linejoin:round}
+/* Faint band sweeping across the chart */
+.scan{fill:url(#scanGrad);opacity:.5;animation:scan 7s linear infinite;pointer-events:none}
+/* Band travels left to right */
+@keyframes scan{from{transform:translateX(60px)}to{transform:translateX(640px)}}
+/* Hint under the chart */
+.diagram-hint{font-family:var(--mono);font-size:10px;letter-spacing:.2em;color:var(--faint);margin-top:10px;text-align:right}
+
+/* Explanation block with a coloured left border */
+.noise-block{border-left:2px solid;padding-left:20px;margin-bottom:32px}
+/* Border colour per noise */
+.nb-pink{border-color:#f293a9}.nb-brown{border-color:#d29a5e}.nb-office{border-color:#e5977f}
+/* Explanation title */
+.noise-block h3{font-family:var(--serif);font-weight:450;font-size:1.55rem;margin-bottom:8px}
+/* Explanation text */
+.noise-block p{color:var(--muted);font-size:14.5px;max-width:46ch}
+/* Callout explaining why masking works */
+.why-box{border:1px dashed rgba(var(--glow),.4);background:rgba(var(--glow),.05);border-radius:12px;
+  padding:18px 20px;color:var(--muted);font-size:14px;max-width:46ch;transition:border-color .8s,background .8s}
+/* Callout lead-in */
+.why-box strong{color:var(--ink);font-weight:500}
+
+/* Index table */
+.ledger{margin-top:40px}
+/* Table row: six-column grid */
+.row{display:grid;grid-template-columns:74px 1.5fr .9fr 1.7fr 1.2fr 120px;gap:18px;align-items:center;
+  padding:22px 10px;border-top:1px solid var(--line);transition:background .3s,transform .3s}
+/* Header row */
+.row.head{border-top:0;border-bottom:1px solid var(--line);padding:12px 10px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.24em;color:var(--faint)}
+/* Clickable rows */
+.row.click{cursor:pointer}
+/* Hover: tint and nudge right */
+.row.click:hover{background:rgba(var(--glow),.05);transform:translateX(6px)}
+/* Reference code */
+.ref-id{font-family:var(--mono);font-size:12px;color:var(--acc2);letter-spacing:.1em;transition:color .8s}
+/* Noise name with its slope sketch */
+.noise-name{display:flex;align-items:center;gap:14px;font-family:var(--serif);font-size:1.35rem;font-weight:450}
+/* Slope sketch size */
+.noise-name svg{width:56px;height:16px;overflow:visible;flex:none}
+/* Slope sketch line */
+.noise-name svg path{fill:none;stroke-width:2}
+/* Slope text */
+.slope{font-family:var(--mono);font-size:12px;color:var(--muted)}
+/* Character and best-for columns */
+.chars,.best{font-size:13px;color:var(--muted)}
+/* LOAD pill */
+.load{justify-self:end;font-family:var(--mono);font-size:11px;letter-spacing:.12em;
+  border:1px solid var(--line);border-radius:999px;padding:7px 15px;color:var(--muted);transition:.3s}
+/* Row hover lights the pill */
+.row.click:hover .load{border-color:var(--acc);color:var(--acc);background:rgba(var(--glow),.08)}
+/* Disabled row (white noise) */
+.row.off{opacity:.45;cursor:not-allowed}
+/* Disabled pill: dashed */
+.row.off .load{border-style:dashed;color:var(--faint);letter-spacing:.18em}
+
+/* Safety: big rule on the left, list on the right */
+.safety-grid{display:grid;grid-template-columns:.85fr 1.15fr;gap:clamp(28px,4vw,56px);margin-top:36px;align-items:start}
+/* Large 60:60 figure */
+.big-rule{font-family:var(--serif);font-weight:380;font-size:clamp(4rem,8vw,7rem);line-height:1}
+/* Slowly blinking colon */
+.big-rule .colon{color:var(--acc);animation:blink 2.4s ease-in-out infinite;transition:color .8s}
+/* Colon blink */
+@keyframes blink{50%{opacity:.35}}
+/* Caption under the big figure */
+.rule-caption{color:var(--muted);font-size:14px;max-width:30ch;margin-top:16px}
+/* One safety rule row */
+.rule{display:flex;gap:18px;padding:17px 14px;border-top:1px solid var(--line);transition:background .3s,transform .3s}
+/* Hover: tint and nudge right */
+.rule:hover{background:rgba(var(--glow),.05);transform:translateX(6px)}
+/* Closing divider under the last rule */
+.rule:last-child{border-bottom:1px solid var(--line)}
+/* Rule code */
+.rule-i{font-family:var(--mono);font-size:12px;color:var(--acc2);flex:none;padding-top:3px;transition:color .8s}
+/* Rule title */
+.rule h4{font-size:15px;font-weight:700;letter-spacing:.02em;margin-bottom:4px}
+/* Rule text */
+.rule p{font-size:13.5px;color:var(--muted);max-width:52ch}
+
+/* Footer */
+footer{border-top:1px solid var(--line);padding:44px 5vw 26px}
+/* Footer columns */
+.foot-grid{max-width:1240px;margin:0 auto;display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:32px}
+/* Footer text */
+.foot-grid p{font-size:13px;color:var(--muted)}
+/* Footer shortcuts list */
+.foot-grid .mono{font-size:11px;letter-spacing:.14em;color:var(--faint);line-height:2}
+/* Footer base line */
+.foot-base{max-width:1240px;margin:32px auto 0;text-align:center;font-family:var(--mono);font-size:10px;letter-spacing:.3em;color:var(--faint)}
+
+/* Toast pill, hidden until .show */
+.toast{position:fixed;bottom:28px;left:50%;transform:translate(-50%,16px);z-index:50;
+  background:#2c1d13;border:1px solid rgba(var(--glow),.5);color:var(--ink);
+  font-family:var(--mono);font-size:12px;letter-spacing:.06em;padding:11px 20px;border-radius:999px;
+  opacity:0;pointer-events:none;transition:opacity .35s,transform .35s}
+/* Visible toast */
+.toast.show{opacity:1;transform:translate(-50%,0)}
+/* Scroll reveal: start hidden and shifted down */
+.reveal{opacity:0;transform:translateY(26px);transition:opacity .8s ease,transform .8s cubic-bezier(.2,.7,.2,1)}
+/* Revealed state (class added by IntersectionObserver) */
+.reveal.in{opacity:1;transform:none}
+
+/* Tablet: stack the columns */
+@media (max-width:1020px){
+  .stage-grid{grid-template-columns:1fr;gap:36px}
+  .console{max-width:600px;width:100%;margin:0 auto}
+  .spectrum-grid,.safety-grid{grid-template-columns:1fr}
+}
+/* Phone: compact table, hide secondary columns */
+@media (max-width:760px){
+  .row{grid-template-columns:56px 1fr auto;row-gap:8px}
+  .c-slope,.c-chars,.c-best,.head .c-slope,.head .c-chars,.head .c-best{display:none}
+  .foot-grid{grid-template-columns:1fr}
+  .stage{padding-top:24px}
+  .badge{display:none}
+}
+/* Reduced motion: effectively disable animation */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001s!important;animation-iteration-count:1!important;transition-duration:.001s!important}
+  html{scroll-behavior:auto}
+}
+
+/* ================= v2.0 additions ================= */
+/* Font stacks with real fallbacks (works offline or if Google Fonts is blocked) */
+:root{
+  --serif:"Fraunces",Georgia,"Times New Roman",serif;
+  --sans:"Schibsted Grotesk",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"Roboto Mono",Menlo,monospace;
+}
+html{-webkit-tap-highlight-color:transparent}
+/* Safe areas on phones with notches / gesture bars */
+.top{padding-top:max(16px,env(safe-area-inset-top));padding-left:max(5vw,env(safe-area-inset-left));padding-right:max(5vw,env(safe-area-inset-right))}
+footer{padding-bottom:max(26px,env(safe-area-inset-bottom))}
+.toast{bottom:calc(28px + env(safe-area-inset-bottom));max-width:calc(100vw - 32px);text-align:center;line-height:1.4}
+/* Office button gets its version tag */
+.mb-ver{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--acc2);margin-left:6px}
+
+/* ---- Voice shield: 5-band touch EQ ---- */
+.shield-eq{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:16px}
+.band{display:flex;flex-direction:column;align-items:center;gap:6px;touch-action:none;cursor:ns-resize;user-select:none;-webkit-user-select:none}
+.band:focus{outline:none}
+.band-val{font-size:11px;color:var(--acc2);min-height:15px;transition:color .8s}
+.band-track{position:relative;width:100%;max-width:48px;height:124px;border-radius:10px;background:rgba(243,228,213,.045);border:1px solid var(--line);overflow:hidden}
+.band:focus-visible .band-track{outline:2px solid var(--acc);outline-offset:2px}
+.band-zero{position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(243,228,213,.2)}
+.band-user,.band-adapt{position:absolute;left:20%;right:20%;border-radius:3px}
+.band-user{background:var(--acc);transition:top .12s,height .12s,background .8s}
+.band-adapt{background:repeating-linear-gradient(135deg,rgba(var(--glow),.95) 0 3px,rgba(var(--glow),.35) 3px 6px);
+  box-shadow:0 0 12px rgba(var(--glow),.6);transition:top .25s,height .25s}
+.band-f{font-size:10px;color:var(--faint);letter-spacing:.06em}
+.shield-row{display:flex;align-items:center;justify-content:space-between;gap:10px 14px;margin-top:16px;flex-wrap:wrap}
+.act-btn{font-family:var(--mono);font-size:11px;letter-spacing:.1em;padding:10px 16px;min-height:42px;border:1px solid rgba(var(--glow),.55);
+  border-radius:999px;color:var(--ink);background:rgba(var(--glow),.08);transition:background .3s,border-color .3s}
+.act-btn:hover{background:rgba(var(--glow),.16)}
+.act-btn:disabled{opacity:.5;cursor:default}
+.cal-bar{height:3px;background:rgba(243,228,213,.08);border-radius:2px;overflow:hidden;margin-top:12px}
+.cal-bar i{display:block;height:100%;width:0;background:var(--acc)}
+.note{font-size:12.5px;color:var(--muted);margin-top:10px;line-height:1.5}
+.note:empty{display:none}
+.note.warn{color:var(--acc2)}
+.chips.small{gap:6px}
+.chips.small .chip{padding:7px 11px;font-size:10px}
+.chip:disabled{opacity:.38;cursor:default;transform:none}
+
+/* Switches (role=switch) */
+.switch{display:flex;align-items:center;gap:12px;font-size:13.5px;color:var(--ink);min-height:42px;text-align:left}
+.switch .knob{width:40px;height:23px;border-radius:999px;background:rgba(243,228,213,.14);position:relative;flex:none;transition:background .3s}
+.switch .knob::after{content:"";position:absolute;top:3px;left:3px;width:17px;height:17px;border-radius:50%;background:var(--ink);transition:transform .25s,background .3s}
+.switch[aria-checked="true"] .knob{background:var(--acc)}
+.switch[aria-checked="true"] .knob::after{transform:translateX(17px);background:var(--acc-ink)}
+.switch:disabled{opacity:.45;cursor:default}
+.sw-sub{display:block;font-size:11px;color:var(--faint);margin-top:1px}
+
+/* Intrusion meter */
+.intrusion{margin-top:14px}
+.intr-bar{height:6px;border-radius:3px;background:rgba(243,228,213,.08);overflow:hidden;margin-top:6px}
+.intr-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,rgba(var(--glow),.35),var(--acc));transition:width .25s}
+
+/* Chart: voice band */
+.vband{fill:rgba(var(--glow),.07);transition:fill .8s}
+.vband-lbl{fill:var(--muted)}
+
+/* How-to steps (a real sequence) */
+.steps{list-style:none;counter-reset:s;margin-top:32px;max-width:780px}
+.steps li{counter-increment:s;display:flex;gap:18px;padding:17px 6px;border-top:1px solid var(--line)}
+.steps li:last-child{border-bottom:1px solid var(--line)}
+.steps li::before{content:counter(s,decimal-leading-zero);font-family:var(--mono);font-size:12px;color:var(--acc2);padding-top:3px;flex:none}
+.steps h4{font-size:15px;font-weight:700;margin-bottom:4px}
+.steps p{font-size:13.5px;color:var(--muted);max-width:60ch}
+
+@media (max-width:760px){
+  .grain{animation:none}                 /* battery: no constant grain animation on phones */
+  .stage-foot span:last-child{display:none}
+  .console{padding:16px 16px 6px}
+  .chip{padding:9px 13px}
+  section.block{padding:72px 5vw}
+}
+.led-wrap{white-space:nowrap}
+@media (max-width:760px){ .brand-sub{display:none} }
+@media (min-width:1021px){ .stage-grid{align-items:start} .stage-grid>div:first-child{padding-top:24px} }
+</style>
+</head>
+<body data-mode="office">
+<div class="bg">
+  <div class="glow glow-pink"></div>
+  <div class="glow glow-brown"></div>
+  <div class="vignette"></div>
+</div>
+<div class="grain"></div>
+
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 24 24"><circle cx="9" cy="12" r="6.5"/><circle cx="15" cy="12" r="6.5"/></svg>
+    <span>HUSH·ARCHIVE</span><span class="brand-sub">v2.0 · mantas de sonido para audífonos</span>
+  </div>
+  <div class="top-right">
+    <span class="badge">TODO LOCAL · SIN MUESTRAS</span>
+    <span class="led-wrap"><i class="led"></i><span id="ledText">en espera</span></span>
+  </div>
+</header>
+
+<main>
+<!-- HERO -->
+<section class="stage" id="stage">
+  <canvas id="scope" aria-hidden="true"></canvas>
+  <div class="stage-grid">
+    <div>
+      <p class="kicker mono">SÍNTESIS EN VIVO · WEB AUDIO</p>
+      <h1 class="big-word" id="bigWord">oficina</h1>
+      <p class="sub-line" id="modeLine"></p>
+      <div class="play-wrap">
+        <svg class="timer-ring" id="timerRing" viewBox="0 0 250 250" aria-hidden="true">
+          <circle id="ringFg" cx="125" cy="125" r="121" pathLength="100"/>
+        </svg>
+        <span class="ring"></span><span class="ring"></span><span class="ring"></span>
+        <button class="play-btn" id="playBtn" aria-label="Reproducir">
+          <svg class="ic ic-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          <svg class="ic ic-pause" viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>
+        </button>
+      </div>
+      <div class="elapsed mono" id="elapsed">00:00</div>
+      <div class="status mono"><span class="eq"><i></i><i></i><i></i></span><span id="statusText">EN ESPERA — TOCA PARA EMPEZAR · SUBE EN 3 S</span></div>
+    </div>
+
+    <!-- CONTROL DECK -->
+    <aside class="console">
+      <div class="console-head mono"><span>PANEL DE CONTROL</span><i class="dot"></i></div>
+
+      <section class="ctl">
+        <p class="ctl-label mono">01 · SEÑAL</p>
+        <div class="mode-grid">
+          <button class="mode-btn" data-m="pink">
+            <span class="mb-top"><span class="mb-name">rosa</span><i class="mb-live">ACTIVO</i></span>
+            <span class="mb-sub">lluvia constante · −3 dB/oct</span>
+            <svg class="mb-spark" viewBox="0 0 64 18"><path d="M0 3 L64 15"/></svg>
+          </button>
+          <button class="mode-btn" data-m="brown">
+            <span class="mb-top"><span class="mb-name">marrón</span><i class="mb-live">ACTIVO</i></span>
+            <span class="mb-sub">cascada profunda · −6 dB/oct</span>
+            <svg class="mb-spark" viewBox="0 0 64 18"><path d="M0 1 L64 17"/></svg>
+          </button>
+          <button class="mode-btn" data-m="office">
+            <span class="mb-top"><span class="mb-name">oficina<span class="mb-ver">2.0</span></span><i class="mb-live">ACTIVO</i></span>
+            <span class="mb-sub">ruido con forma de voz + piso grave · escudo de 5 bandas</span>
+            <svg class="mb-spark mb-spark-mix" viewBox="0 0 64 18"><path class="p" d="M0 3 L64 15"/><path class="b" d="M0 1 L64 17"/><path class="m" d="M0 14 C12 4 22 3 34 6 S54 13 64 16"/></svg>
+          </button>
+        </div>
+        <div class="blend" id="blendWrap">
+          <div class="blend-in">
+            <div class="row-between"><span class="hint mono">mezcla oficina · voz ↔ rumor</span><span class="readout mono" id="blendOut">80 / 20</span></div>
+            <input type="range" id="blendRange" min="50" max="95" value="80" aria-label="Mezcla oficina: proporción de ruido con forma de voz frente a rumor grave">
+            <div class="slider-meta"><span>más rumor</span><span>más voz</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="ctl">
+        <p class="ctl-label mono">02 · ESCUDO DE VOZ</p>
+        <div class="chips small" id="presetChips">
+          <button class="chip" data-p="wall">A TRAVÉS DE MURO</button>
+          <button class="chip" data-p="open">OFICINA ABIERTA</button>
+          <button class="chip" data-p="hall">PASILLO</button>
+          <button class="chip" data-p="flat">PLANO</button>
+          <button class="chip" data-p="cal" id="calChip" disabled>CALIBRADO</button>
+        </div>
+        <div class="shield-eq" id="shieldEq">
+          <div class="band" data-i="0" role="slider" tabindex="0" aria-label="Banda 250 Hz" aria-valuemin="-9" aria-valuemax="9"><span class="band-val mono">0</span><div class="band-track"><b class="band-zero"></b><i class="band-user"></i><i class="band-adapt"></i></div><span class="band-f mono">250</span></div>
+          <div class="band" data-i="1" role="slider" tabindex="0" aria-label="Banda 500 Hz" aria-valuemin="-9" aria-valuemax="9"><span class="band-val mono">0</span><div class="band-track"><b class="band-zero"></b><i class="band-user"></i><i class="band-adapt"></i></div><span class="band-f mono">500</span></div>
+          <div class="band" data-i="2" role="slider" tabindex="0" aria-label="Banda 1 kHz" aria-valuemin="-9" aria-valuemax="9"><span class="band-val mono">0</span><div class="band-track"><b class="band-zero"></b><i class="band-user"></i><i class="band-adapt"></i></div><span class="band-f mono">1k</span></div>
+          <div class="band" data-i="3" role="slider" tabindex="0" aria-label="Banda 2 kHz" aria-valuemin="-9" aria-valuemax="9"><span class="band-val mono">0</span><div class="band-track"><b class="band-zero"></b><i class="band-user"></i><i class="band-adapt"></i></div><span class="band-f mono">2k</span></div>
+          <div class="band" data-i="4" role="slider" tabindex="0" aria-label="Banda 4 kHz" aria-valuemin="-9" aria-valuemax="9"><span class="band-val mono">0</span><div class="band-track"><b class="band-zero"></b><i class="band-user"></i><i class="band-adapt"></i></div><span class="band-f mono">4k</span></div>
+        </div>
+        <div class="slider-meta"><span>voces graves</span><span id="presetName">a través de muro</span><span>consonantes</span></div>
+
+        <div class="shield-row">
+          <button class="act-btn" id="calBtn">CALIBRAR · 15 S</button>
+          <span class="hint mono">hazlo mientras hablan al lado</span>
+        </div>
+        <div class="cal-bar"><i id="calBar"></i></div>
+        <p class="note" id="calNote"></p>
+
+        <div class="shield-row">
+          <button class="switch" id="adaptSw" role="switch" aria-checked="false">
+            <span class="knob"></span><span>Adaptativo<span class="sw-sub">refuerza solo cuando detecta voces</span></span>
+          </button>
+          <div class="chips small" id="sensChips" aria-label="Sensibilidad">
+            <button class="chip" data-s="low">BAJA</button>
+            <button class="chip" data-s="mid">MEDIA</button>
+            <button class="chip" data-s="high">ALTA</button>
+          </div>
+        </div>
+        <div class="intrusion">
+          <div class="row-between"><span class="hint mono">voces detectadas</span><span class="readout mono" id="intrOut">apagado</span></div>
+          <div class="intr-bar"><i id="intrBar"></i></div>
+        </div>
+        <p class="note" id="micNote"></p>
+      </section>
+
+      <section class="ctl">
+        <p class="ctl-label mono">03 · NIVEL</p>
+        <div class="row-between"><span class="hint mono">0 = apagado · estimación digital</span><span class="readout mono" id="dbOut">—</span></div>
+        <input type="range" id="volRange" min="0" max="100" value="36" aria-label="Volumen">
+        <div class="slider-meta"><span>suave</span><span class="cap-flag">TOPE DIGITAL ACTIVO</span></div>
+      </section>
+
+      <section class="ctl">
+        <p class="ctl-label mono">04 · CALIDEZ</p>
+        <div class="row-between"><span class="hint mono">recorta los agudos</span><span class="readout mono" id="khzOut">8.5 kHz</span></div>
+        <input type="range" id="warmRange" min="0" max="100" value="72" aria-label="Calidez (filtro pasa bajos)">
+        <div class="slider-meta"><span>rumor</span><span>más brillante</span></div>
+      </section>
+
+      <section class="ctl">
+        <p class="ctl-label mono">05 · TEMPORIZADOR</p>
+        <div class="chips">
+          <button class="chip" data-min="0">NO</button>
+          <button class="chip" data-min="25">25 MIN</button>
+          <button class="chip" data-min="50">50 MIN</button>
+          <button class="chip" data-min="60">60 MIN</button>
+          <button class="chip" data-min="90">90 MIN</button>
+        </div>
+        <div class="cd-line mono" id="cdOut">sin temporizador</div>
+      </section>
+
+      <section class="ctl">
+        <p class="ctl-label mono">06 · MONITOR</p>
+        <div class="monitor-row">
+          <div class="meters">
+            <div class="meter" title="izquierdo"><i id="mL"></i></div>
+            <div class="meter" title="derecho"><i id="mR"></i></div>
+          </div>
+          <div class="mon-txt">
+            <span class="mono">IZQ / DER INDEPENDIENTES</span>
+            <span>dos mantas sin correlación, un solo muro suave</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="ctl">
+        <p class="ctl-label mono">07 · DISPOSITIVO</p>
+        <button class="switch" id="texSw" role="switch" aria-checked="true">
+          <span class="knob"></span><span>Textura viva<span class="sw-sub">variaciones lentas para cansar menos el oído</span></span>
+        </button>
+        <button class="switch" id="wakeSw" role="switch" aria-checked="false">
+          <span class="knob"></span><span>Pantalla encendida<span class="sw-sub">evita que el teléfono se bloquee mientras suena</span></span>
+        </button>
+        <p class="note" id="devNote"></p>
+      </section>
+    </aside>
+  </div>
+  <div class="stage-foot">
+    <span>IZQ / DER INDEPENDIENTES · LIMITADOR · TOPE DIGITAL · v2.0</span>
+    <span>ESPACIO reproducir · 1 rosa · 2 marrón · 3 oficina</span>
+  </div>
+</section>
+
+<!-- HOW TO -->
+<section class="block" id="howto">
+  <div class="inner">
+    <p class="sec-kicker mono reveal">01 · EN LA OFICINA</p>
+    <h2 class="reveal">Cinco pasos para dejar de <em>entender</em> la reunión de al lado</h2>
+    <ol class="steps">
+      <li class="reveal"><div><h4>Ponte audífonos</h4><p>Con audífonos el micrófono no se escucha a sí mismo y el escudo trabaja a menor volumen. Si tienen cancelación de ruido, actívala: ella quita el rumor grave y esta app tapa las voces que quedan.</p></div></li>
+      <li class="reveal"><div><h4>Elige oficina 2.0 y un preset</h4><p>«A través de muro» si las voces llegan apagadas desde otra sala; «Oficina abierta» si las escuchas nítidas, con consonantes; «Pasillo» para un punto intermedio.</p></div></li>
+      <li class="reveal"><div><h4>Calibra mientras conversan</h4><p>Toca «Calibrar» cuando la conversación molesta esté ocurriendo. En 15 segundos la app mide qué bandas ocupan esas voces y ajusta el escudo.</p></div></li>
+      <li class="reveal"><div><h4>Activa el modo adaptativo</h4><p>El escudo se queda bajo cuando hay calma y sube hasta 6 dB en las bandas de voz cuando alguien habla, con subidas de unos 3 s y bajadas de unos 15 s para que no notes el cambio.</p></div></li>
+      <li class="reveal"><div><h4>Baja el nivel hasta el mínimo que funcione</h4><p>La meta es que las palabras dejen de entenderse, no que desaparezcan. Ese punto suele estar bastante más abajo de lo que uno espera.</p></div></li>
+    </ol>
+  </div>
+</section>
+
+<!-- SPECTRUM -->
+<section class="block" id="spectrum" style="padding-top:20px">
+  <div class="inner">
+    <p class="sec-kicker mono reveal">02 · LA PENDIENTE</p>
+    <h2 class="reveal">Tres <em>colores</em>, un escudo</h2>
+    <div class="spectrum-grid">
+      <div class="reveal">
+        <div class="diagram">
+          <svg viewBox="0 0 680 340" role="img" aria-label="Espectros de los ruidos rosa, marrón y oficina 2.0">
+            <defs>
+              <linearGradient id="scanGrad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0" stop-color="rgba(243,228,213,0)"/>
+                <stop offset="1" stop-color="rgba(243,228,213,.10)"/>
+              </linearGradient>
+            </defs>
+            <!-- Speech band 250 Hz – 4 kHz -->
+            <rect class="vband" x="272.3" y="30" width="232.4" height="260"/>
+            <text class="axis vband-lbl" x="388.5" y="284" text-anchor="middle">banda de la voz</text>
+            <g>
+              <line class="grid-line" x1="60" y1="53.6" x2="640" y2="53.6"/>
+              <line class="grid-line" x1="60" y1="90.7" x2="640" y2="90.7"/>
+              <line class="grid-line" x1="60" y1="127.9" x2="640" y2="127.9"/>
+              <line class="grid-line" x1="60" y1="165" x2="640" y2="165"/>
+              <line class="grid-line" x1="60" y1="202.1" x2="640" y2="202.1"/>
+              <line class="grid-line" x1="60" y1="239.3" x2="640" y2="239.3"/>
+              <line class="grid-line" x1="60" y1="276.4" x2="640" y2="276.4"/>
+              <line class="grid-line" x1="60" y1="30" x2="60" y2="290"/>
+              <line class="grid-line" x1="253" y1="30" x2="253" y2="290"/>
+              <line class="grid-line" x1="447" y1="30" x2="447" y2="290"/>
+              <line class="grid-line" x1="640" y1="30" x2="640" y2="290"/>
+            </g>
+            <text class="axis" x="52" y="57" text-anchor="end">0</text>
+            <text class="axis" x="52" y="132" text-anchor="end">−20</text>
+            <text class="axis" x="52" y="206" text-anchor="end">−40</text>
+            <text class="axis" x="52" y="280" text-anchor="end">−60 dB</text>
+            <text class="axis" x="60" y="312">20 Hz</text>
+            <text class="axis" x="253" y="312" text-anchor="middle">200</text>
+            <text class="axis" x="447" y="312" text-anchor="middle">2k</text>
+            <text class="axis" x="640" y="312" text-anchor="end">20k</text>
+            <rect class="scan" x="-70" y="30" width="70" height="260"/>
+            <path id="lineWhite" class="line l-white" pathLength="1" d="M60 53.6 H640"/>
+            <path id="linePink"  class="line l-pink"  pathLength="1" d="M60 53.6 L640 165"/>
+            <path id="lineBrown" class="line l-brown" pathLength="1" d="M60 53.6 L640 276.4"/>
+            <path id="lineOffice" class="line l-office" pathLength="1" d="M60 53.6 L640 173"/>
+            <text class="end-lbl" x="636" y="66" text-anchor="end" fill="#6f5b4e">blanco · 0 dB/oct — no se ofrece</text>
+            <text class="end-lbl" x="636" y="156" text-anchor="end" fill="#f293a9">rosa · −3 dB/oct</text>
+            <text class="end-lbl" x="604" y="281" text-anchor="end" fill="#d29a5e">marrón · −6 dB/oct</text>
+            <text class="end-lbl" id="officeLbl" x="66" y="44" fill="#e5977f">oficina 2.0</text>
+          </svg>
+          <p class="diagram-hint">TOCA UNA LÍNEA PARA CARGARLA · LA CURVA OFICINA MUESTRA TU ESCUDO EN VIVO</p>
+        </div>
+      </div>
+      <div>
+        <div class="noise-block nb-pink reveal">
+          <h3>Rosa — la manta de lluvia</h3>
+          <p>Cae 3 dB por octava: suficiente brillo para sentirse presente, con la mayor parte del peso bajo 2 kHz. Suena a lluvia constante o viento entre árboles.</p>
+        </div>
+        <div class="noise-block nb-brown reveal">
+          <h3>Marrón — la manta profunda</h3>
+          <p>Cae 6 dB por octava: el piso, no el techo. Agua de cascada, trueno lejano, el motor de un barco bajo el casco. La más suave de las tres.</p>
+        </div>
+        <div class="noise-block nb-office reveal">
+          <h3>Oficina 2.0 — el escudo</h3>
+          <p>La base es ruido con la forma del espectro promedio del habla humana (LTASS): concentra su energía justo donde viven las voces, entre 250 Hz y 4 kHz, y no la desperdicia en extremos que no tapan nada. Debajo va un piso de marrón para el aire acondicionado y el tráfico. El escudo de 5 bandas afina esa forma para tu oficina.</p>
+        </div>
+        <div class="why-box reveal">
+          <strong>Por qué no «cancela» —</strong> la cancelación real necesita un micrófono pegado al oído y reacción en microsegundos, algo que solo hacen audífonos con ANC. Esta app hace otra cosa: <em>enmascara</em>. Las voces siguen llegando, pero bajo un sonido estable con su misma forma, y tu cerebro deja de poder separar las palabras. Lo que distrae no es el volumen de una conversación, sino entenderla.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- INDEX -->
+<section class="block" id="archive" style="padding-top:20px">
+  <div class="inner">
+    <p class="sec-kicker mono reveal">03 · ÍNDICE</p>
+    <h2 class="reveal">El <em>índice</em></h2>
+    <div class="ledger">
+      <div class="row head reveal">
+        <span>REF</span><span>RUIDO</span><span class="c-slope">PENDIENTE</span>
+        <span class="c-chars">CARÁCTER</span><span class="c-best">IDEAL PARA</span><span style="text-align:right">ACCIÓN</span>
+      </div>
+      <div class="row click reveal" data-m="pink" role="button" tabindex="0" aria-label="Cargar ruido rosa">
+        <span class="ref-id">PN-01</span>
+        <span class="noise-name">Ruido rosa <svg viewBox="0 0 64 18"><path stroke="#f293a9" d="M0 3 L64 15"/></svg></span>
+        <span class="slope c-slope">−3 dB / octava</span>
+        <span class="chars c-chars">lluvia constante · viento en el bosque · siseo suave de cinta</span>
+        <span class="best c-best">concentración general · teclados</span>
+        <span class="load">CARGAR</span>
+      </div>
+      <div class="row click reveal" data-m="brown" role="button" tabindex="0" aria-label="Cargar ruido marrón">
+        <span class="ref-id">BN-02</span>
+        <span class="noise-name">Ruido marrón <svg viewBox="0 0 64 18"><path stroke="#d29a5e" d="M0 1 L64 17"/></svg></span>
+        <span class="slope c-slope">−6 dB / octava</span>
+        <span class="chars c-chars">cascada · trueno lejano · motor de barco</span>
+        <span class="best c-best">dormir · sesiones muy largas</span>
+        <span class="load">CARGAR</span>
+      </div>
+      <div class="row click reveal" data-m="office" role="button" tabindex="0" aria-label="Cargar oficina 2.0">
+        <span class="ref-id">OF-03</span>
+        <span class="noise-name">Oficina 2.0 <svg viewBox="0 0 64 18"><path stroke="#e5977f" d="M0 14 C12 4 22 3 34 6 S54 13 64 16"/></svg></span>
+        <span class="slope c-slope">forma de voz + marrón</span>
+        <span class="chars c-chars">escudo de 5 bandas · calibración · modo adaptativo</span>
+        <span class="best c-best">voces de otras oficinas · open space</span>
+        <span class="load">CARGAR</span>
+      </div>
+      <div class="row off reveal" aria-disabled="true">
+        <span class="ref-id">WN-00</span>
+        <span class="noise-name">Ruido blanco <svg viewBox="0 0 64 18"><path stroke="#6f5b4e" d="M0 9 L64 9"/></svg></span>
+        <span class="slope c-slope">plano · 0 dB</span>
+        <span class="chars c-chars">estática pura, áspera en los agudos</span>
+        <span class="best c-best">solo referencia</span>
+        <span class="load">NO SE OFRECE</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SAFETY -->
+<section class="block" id="safety" style="padding-top:20px">
+  <div class="inner">
+    <p class="sec-kicker mono reveal">04 · CUIDADO AUDITIVO</p>
+    <h2 class="reveal">Hecha para ser <em>suave</em></h2>
+    <div class="safety-grid">
+      <div class="reveal">
+        <div class="big-rule">60<span class="colon">:</span>60</div>
+        <p class="rule-caption">como máximo 60 minutos seguidos y 60 % del volumen del teléfono: la regla práctica para sesiones largas con audífonos.</p>
+      </div>
+      <div>
+        <div class="rule reveal"><span class="rule-i">S-01</span><div><h4>Tope digital</h4><p>La señal tiene un techo fijo y el modo adaptativo nunca lo cruza: si el escudo refuerza una banda, el volumen general baja lo necesario. El nivel real en tus oídos depende del volumen del teléfono y de los audífonos, por eso la lectura en dB es solo una estimación.</p></div></div>
+        <div class="rule reveal"><span class="rule-i">S-02</span><div><h4>Bordes suaves</h4><p>Entrada de 3 segundos, salida suave, cruces de un segundo entre colores y rampas lentas en el escudo. Nada golpea.</p></div></div>
+        <div class="rule reveal"><span class="rule-i">S-03</span><div><h4>Limitador</h4><p>Un compresor final vigila la mezcla en tiempo real y atrapa cualquier pico antes de que llegue a tus oídos.</p></div></div>
+        <div class="rule reveal"><span class="rule-i">S-04</span><div><h4>Dos mantas</h4><p>Los canales izquierdo y derecho son ruidos independientes: un muro más ancho que enmascara con menos volumen.</p></div></div>
+        <div class="rule reveal"><span class="rule-i">S-05</span><div><h4>Micrófono local</h4><p>La calibración y el modo adaptativo miden el micrófono por bandas de frecuencia dentro de tu teléfono. No se graba audio, no se envía nada, y el micrófono se libera al pausar.</p></div></div>
+        <div class="rule reveal"><span class="rule-i">S-06</span><div><h4>Levanta los audífonos</h4><p>Cada 50 minutos la app te recuerda tomar diez minutos sin enmascarar.</p></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="foot-grid">
+    <p>HUSH ARCHIVE 2.0 — una máquina para el silencio. Todo se sintetiza en vivo con Web Audio: sin muestras, sin archivos de audio, sin peticiones de red aparte de las fuentes tipográficas.</p>
+    <p class="mono">ESPACIO — reproducir / pausar<br>1 rosa · 2 marrón · 3 oficina<br>AJUSTES GUARDADOS EN ESTE DISPOSITIVO</p>
+    <p>Nada se graba. Nada sale de esta página.<br><br>Para enmascarar sonido externo; no es un dispositivo médico. Si sientes presión o molestia, baja el nivel de inmediato.</p>
+  </div>
+  <div class="foot-base">HUSH ARCHIVE 2.0 · SINTETIZADO, NUNCA GRABADO</div>
+</footer>
+<div class="toast" id="toast" role="status"></div>
+<script>
+// HUSH ARCHIVE 2.0 — app logic.
+// Sections: helpers/state · spectra maths · noise generation · audio graph · shield (EQ) · microphone,
+// calibration & adaptive masking · transport · Android (media session, wake lock) · modes · controls · scope · clock · init
+(() => {
+'use strict';
+const $  = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const clamp = (x,a,b) => Math.min(b, Math.max(a, x));
+
+const store = {
+  get(k,d){ try{ const v=localStorage.getItem('ha_'+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
+  set(k,v){ try{ localStorage.setItem('ha_'+k, JSON.stringify(v)); }catch(e){} }
+};
+
+/* ---------------- constants ---------------- */
+const PAL = { pink:{r:242,g:147,b:169}, brown:{r:210,g:154,b:94}, office:{r:229,g:151,b:127} };
+const MODE_NAME = { pink:'rosa', brown:'marrón', office:'oficina' };
+const MAX_GAIN = 0.14;               // hard digital output cap (unchanged from v1)
+const RMS_TARGET = 0.4;
+const BUF_SECONDS = 8, XFADE_SECONDS = 1;
+const BREAK_SECONDS = 50*60;
+const BASE_TITLE = document.title;
+
+const BANDS = [250, 500, 1000, 2000, 4000];   // shield band centres (Hz), one octave apart
+const EQ_Q = 1.41;                             // ≈ one-octave bandwidth
+const EQ_LIM = 9;                              // user range ±9 dB
+const ADAPT_MAX = 6;                           // adaptive boost ceiling per band (dB)
+const ADAPT_UP = 3, ADAPT_DOWN = 15;           // time constants (s): rise fast-ish, fall slowly
+const CAL_MS = 15000;
+const PRESETS = { wall:[4,4,2,-2,-4], open:[-2,1,3,4,2], hall:[1,2,2,1,0], flat:[0,0,0,0,0] };
+const PRESET_NAME = { wall:'a través de muro', open:'oficina abierta', hall:'pasillo', flat:'plano', cal:'calibrado', custom:'personalizado' };
+const BAND_NAME = ['250 Hz','500 Hz','1 kHz','2 kHz','4 kHz'];
+// Detection thresholds: ex = dB above the noise floor, fl = dB of short-term fluctuation (speech is bumpy)
+const SENS = { low:{ex:5, fl:2.6}, mid:{ex:3.5, fl:2}, high:{ex:2.5, fl:1.5} };
+
+const numArr = (v,n) => (Array.isArray(v) && v.length===n && v.every(x=>typeof x==='number' && isFinite(x))) ? v : null;
+const savedMode = store.get('mode','office');
+
+const state = {
+  mode:   PAL[savedMode] ? savedMode : 'office',
+  vol:    clamp(+store.get('vol',36) || 0, 0, 100),
+  warm:   clamp(+store.get('warm',72) || 0, 0, 100),
+  vblend: clamp(+store.get('vblend',80) || 80, 50, 95),   // office: % voice-shaped (rest is brown)
+  timer:  store.get('timer',0),
+  eq:     (numArr(store.get('eq',null),5) || PRESETS.wall).map(g=>clamp(g,-EQ_LIM,EQ_LIM)),
+  preset: PRESET_NAME[store.get('preset','wall')] ? store.get('preset','wall') : 'custom',
+  calEq:  numArr(store.get('calEq',null),5),
+  adaptPref: !!store.get('adapt',false),   // user wants adaptive (mic opens only while playing)
+  adaptOn: false,                          // adaptive actually running
+  sens:   SENS[store.get('sens','mid')] ? store.get('sens','mid') : 'mid',
+  texture: store.get('texture',true) !== false,
+  wake:   !!store.get('wake',false),
+  playing:false, elapsed:0, total:0, remaining:null, run:0, nextBreak:BREAK_SECONDS
+};
+let adapt = [0,0,0,0,0];      // current adaptive boost per band (dB)
+let lifeMul = 1;              // textura viva: multiplier on the warmth cutoff
+
+/* ---------------- DOM ---------------- */
+const bigWord=$('#bigWord'), modeLine=$('#modeLine'), playBtn=$('#playBtn'),
+      statusText=$('#statusText'), ledText=$('#ledText'), elapsedEl=$('#elapsed'),
+      scope=$('#scope'), stage=$('#stage'), s2=scope.getContext('2d'),
+      dbOut=$('#dbOut'), khzOut=$('#khzOut'), cdOut=$('#cdOut'),
+      volRange=$('#volRange'), warmRange=$('#warmRange'),
+      blendRange=$('#blendRange'), blendOut=$('#blendOut'),
+      lineOfficeEl=$('#lineOffice'), officeLbl=$('#officeLbl'),
+      mL=$('#mL'), mR=$('#mR'), ringEl=$('#timerRing'), ringFg=$('#ringFg'), toastEl=$('#toast'),
+      bandEls=$$('.band'), presetNameEl=$('#presetName'), calChip=$('#calChip'),
+      calBtn=$('#calBtn'), calBar=$('#calBar'), calNote=$('#calNote'),
+      adaptSw=$('#adaptSw'), intrOut=$('#intrOut'), intrBar=$('#intrBar'), micNote=$('#micNote'),
+      texSw=$('#texSw'), wakeSw=$('#wakeSw'), devNote=$('#devNote');
+
+const MODE_COPY = {
+  pink  : { line:'lluvia constante, viento en un bosque: el siseo suave que cubre voces y teclados.',
+            toast:'ROSA cargado — más suave, más amplio' },
+  brown : { line:'agua profunda, trueno lejano: la manta más grave y tranquila que puedes usar.',
+            toast:'MARRÓN cargado — más profundo' },
+  office: { line:'ruido con la forma de la voz humana sobre un piso grave: hecho para que las conversaciones de otras oficinas dejen de entenderse.',
+            toast:'OFICINA 2.0 cargada — escudo de voz activo' }
+};
+
+/* ---------------- audio objects ---------------- */
+let ctx=null, started=false, selfSuspend=false;
+const src={}, g={};
+let trim=null, eqNodes=[], lp=null, life=null, master=null, duck=null, comp=null,
+    split=null, anL=null, anR=null, waveL=null, waveR=null;
+let dpr=1, W=0, H=0, col={...PAL[state.mode]};
+let lastTick=performance.now(), lastDb=0, toastT=null, selfTestDone=false, fadeEnd=0, lifeNext=0;
+
+const rgbaCol = a => `rgba(${col.r|0},${col.g|0},${col.b|0},${a})`;
+const volGain = () => Math.pow(state.vol/100, 1.8) * MAX_GAIN;
+const warmthFreq = () => 1200 * Math.pow(15, state.warm/100);
+
+function fmt(s){
+  s=Math.max(0,Math.floor(s));
+  const h=s/3600|0, m=(s%3600)/60|0, x=s%60;
+  return (h ? h+':'+String(m).padStart(2,'0') : m) + ':' + String(x).padStart(2,'0');
+}
+function toast(msg){
+  toastEl.textContent=msg; toastEl.classList.add('show');
+  clearTimeout(toastT); toastT=setTimeout(()=>toastEl.classList.remove('show'),4000);
+}
+function flagTitle(on){ document.title = on ? '◔ pausa · '+BASE_TITLE : BASE_TITLE; }
+function setStatus(t){ statusText.textContent=t.toUpperCase(); ledText.textContent=t; }
+function paintRange(el){
+  const lo=+el.min||0, hi=+el.max||100;
+  el.style.setProperty('--fill', ((el.value-lo)/(hi-lo)*100)+'%');
+}
+function showRing(on){ ringEl.classList.toggle('show',on); if(!on) ringFg.style.strokeDashoffset=100; }
+function setSwitch(el,on){ el.setAttribute('aria-checked', on?'true':'false'); }
+function playingStatus(){ return state.adaptOn ? 'escudo adaptativo' : 'enmascarando'; }
+
+/* ---------------- spectra maths ----------------
+   Analytic power spectra of the three generators, used to (a) draw the office curve and
+   (b) compute how much the shield EQ changes total power, so boosts never break the cap. */
+const PSD = {
+  pink : f => 1/f,
+  brown: f => 1/(1+(f/151)*(f/151)),               // leaky integrator: corner ≈ 151 Hz
+  voice: f => { const w=f/200, w2=w*w;               // pink · 2nd-order HP 200 Hz · 1st-order LP 900 Hz
+                return (1/f) * (w2*w2/((1-w2)*(1-w2)+(w/.707)*(w/.707))) / (1+(f/900)*(f/900)); }
+};
+const GRID=[], DF=[];
+for(let i=0;i<=160;i++){ const f=20*Math.pow(1000,i/160); GRID.push(f); DF.push(f*Math.log(1000)/160); }
+const NORM={};
+for(const k in PSD){ let s=0; GRID.forEach((f,i)=>s+=PSD[k](f)*DF[i]); NORM[k]=s; }
+function shares(m){
+  if(m==='pink')  return { pink:1 };
+  if(m==='brown') return { brown:1 };
+  const v=state.vblend/100; return { voice:v, brown:1-v };
+}
+function mixPSD(f,m){ const sh=shares(m); let p=0; for(const k in sh) p+=sh[k]*PSD[k](f)/NORM[k]; return p; }
+function peak2(f,f0,gdb){                              // |H|² of a peaking EQ (analog prototype)
+  if(!gdb) return 1;
+  const A=Math.pow(10,gdb/40), w=f/f0, d=1-w*w, n=w*A/EQ_Q, m=w/(A*EQ_Q);
+  return (d*d+n*n)/(d*d+m*m);
+}
+function eqPow2(f,gains){ let h=1; for(let i=0;i<5;i++) h*=peak2(f,BANDS[i],gains[i]); return h; }
+function lp2(f,fc){ const w=f/fc, d=1-w*w, q=w/.7; return 1/(d*d+q*q); }
+function powerGain(gains){
+  let a=0,b=0;
+  for(let i=0;i<GRID.length;i++){ const p=mixPSD(GRID[i],state.mode)*DF[i]; a+=p*eqPow2(GRID[i],gains); b+=p; }
+  return a/b;
+}
+const totalEq = () => state.eq.map((v,i)=>v+adapt[i]);
+// User EQ never raises total power (trim compensates boosts)
+const trimGain = () => { const pg=powerGain(state.eq); return pg>1 ? 1/Math.sqrt(pg) : 1; };
+// Master target that keeps the final output under MAX_GAIN even with adaptive boosts on top
+function masterTarget(){
+  const pgU=powerGain(state.eq), pgT=powerGain(totalEq());
+  const eff=Math.sqrt(pgT/Math.max(1,pgU));
+  return Math.min(volGain(), MAX_GAIN/Math.max(1,eff));
+}
+
+/* ---------------- noise generation ---------------- */
+function normalize(data,target){
+  let sum=0;
+  for(let i=0;i<data.length;i++) sum+=data[i]*data[i];
+  const rms=Math.sqrt(sum/data.length)||1, s=target/rms;
+  for(let i=0;i<data.length;i++) data[i]=Math.max(-.98,Math.min(.98,data[i]*s));
+}
+// Equal-power crossfade of an extra tail into the head: a click-free loop
+function seamless(raw,len){
+  const xf=raw.length-len, out=new Float32Array(len);
+  out.set(raw.subarray(0,len));
+  for(let i=0;i<xf;i++){
+    const a=(i/xf)*Math.PI/2;
+    out[i]=raw[i]*Math.sin(a)+raw[len+i]*Math.cos(a);
+  }
+  return out;
+}
+const sizes = () => ({ len:ctx.sampleRate*BUF_SECONDS, xf:Math.round(ctx.sampleRate*XFADE_SECONDS) });
+// Paul Kellet's pink filter bank
+function pinkRaw(n){
+  const d=new Float32Array(n);
+  let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+  for(let i=0;i<n;i++){
+    const w=Math.random()*2-1;
+    b0=.99886*b0+w*.0555179; b1=.99332*b1+w*.0750759; b2=.96900*b2+w*.1538520;
+    b3=.86650*b3+w*.3104856; b4=.55000*b4+w*.5329522; b5=-.7616*b5-w*.0168980;
+    d[i]=b0+b1+b2+b3+b4+b5+b6+w*.5362; b6=w*.115926;
+  }
+  return d;
+}
+function makePinkData(){ const {len,xf}=sizes(), d=pinkRaw(len+xf); normalize(d,RMS_TARGET); return seamless(d,len); }
+function makeBrownData(){
+  const {len,xf}=sizes(), d=new Float32Array(len+xf);
+  let last=0;
+  for(let i=0;i<d.length;i++){ const w=Math.random()*2-1; last=(last+0.02*w)/1.02; d[i]=last*3.5; }
+  normalize(d,RMS_TARGET); return seamless(d,len);
+}
+// RBJ biquad high-pass, in place
+function highpass(d,f,Q,sr){
+  const w0=2*Math.PI*f/sr, c=Math.cos(w0), al=Math.sin(w0)/(2*Q), a0=1+al;
+  const b0=(1+c)/2/a0, b1=-(1+c)/a0, b2=(1+c)/2/a0, a1=-2*c/a0, a2=(1-al)/a0;
+  let x1=0,x2=0,y1=0,y2=0;
+  for(let i=0;i<d.length;i++){
+    const x=d[i], y=b0*x+b1*x1+b2*x2-a1*y1-a2*y2;
+    x2=x1; x1=x; y2=y1; y1=y; d[i]=y;
+  }
+}
+function onePoleLP(d,f,sr){
+  const a=1-Math.exp(-2*Math.PI*f/sr); let y=0;
+  for(let i=0;i<d.length;i++){ y+=a*(d[i]-y); d[i]=y; }
+}
+/* Voice-shaped noise: approximates the long-term average speech spectrum (LTASS):
+   rolls off below ~200 Hz, peaks around 300–600 Hz, falls ~9 dB/oct above ~1 kHz.
+   Energy goes where voices are, so it masks speech at a lower overall level. */
+function makeVoiceData(){
+  const {len,xf}=sizes(), d=pinkRaw(len+xf), sr=ctx.sampleRate;
+  highpass(d,200,.707,sr); onePoleLP(d,900,sr);
+  normalize(d,RMS_TARGET); return seamless(d,len);
+}
+
+/* ---------------- audio graph ----------------
+   srcPink  → gPink  ─┐
+   srcBrown → gBrown ─┼→ trim → EQ×5 (shield + adaptive) → lp (warmth) → life → master → duck → comp → out
+   srcVoice → gVoice ─┘                                                                    └→ split → anL/anR
+   mic (optional) → micAnalyser → (silent sink)   — analysed, never played, never recorded
+------------------------------------------------ */
+function buildAudio(){
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if(!AC) throw new Error('este navegador no tiene Web Audio');
+  try{ ctx = new AC({ latencyHint:'playback' }); }   // bigger buffers: fewer dropouts, less battery
+  catch(e){ ctx = new AC(); }
+  const sr=ctx.sampleRate, len=sr*BUF_SECONDS;
+  const mkBuf = gen => { const b=ctx.createBuffer(2,len,sr); b.getChannelData(0).set(gen()); b.getChannelData(1).set(gen()); return b; };
+  const gens = { pink:makePinkData, brown:makeBrownData, voice:makeVoiceData };
+  trim = ctx.createGain(); trim.gain.value = trimGain();
+  const g0 = modeGains(state.mode);
+  for(const k in gens){
+    src[k]=ctx.createBufferSource(); src[k].buffer=mkBuf(gens[k]); src[k].loop=true;
+    g[k]=ctx.createGain(); g[k].gain.value=g0[k];
+    src[k].connect(g[k]); g[k].connect(trim);
+  }
+  eqNodes = BANDS.map((f,i)=>{
+    const b=ctx.createBiquadFilter(); b.type='peaking'; b.frequency.value=f; b.Q.value=EQ_Q; b.gain.value=state.eq[i]; return b;
+  });
+  lp = ctx.createBiquadFilter(); lp.type='lowpass'; lp.Q.value=.7; lp.frequency.value=warmthFreq();
+  life = ctx.createGain(); life.gain.value=1;
+  master = ctx.createGain(); master.gain.value=0;
+  duck = ctx.createGain(); duck.gain.value=1;
+  comp = ctx.createDynamicsCompressor();
+  comp.threshold.value=-16; comp.knee.value=12; comp.ratio.value=10; comp.attack.value=.005; comp.release.value=.18;
+  let node=trim; eqNodes.forEach(b=>{ node.connect(b); node=b; });
+  node.connect(lp); lp.connect(life); life.connect(master); master.connect(duck); duck.connect(comp); comp.connect(ctx.destination);
+  split = ctx.createChannelSplitter(2);
+  anL = ctx.createAnalyser(); anR = ctx.createAnalyser(); anL.fftSize=1024; anR.fftSize=1024;
+  waveL=new Float32Array(1024); waveR=new Float32Array(1024);
+  duck.connect(split); split.connect(anL,0,0); split.connect(anR,1,0);
+  for(const k in src) src[k].start(0);
+  ctx.onstatechange = onCtxState;
+  started=true;
+}
+// Every mode carries the same total power (.5² = .25); uncorrelated sources add in power
+function modeGains(m){
+  if(m==='pink')  return { pink:.5, brown:0, voice:0 };
+  if(m==='brown') return { pink:0, brown:.5, voice:0 };
+  const v=state.vblend/100;
+  return { pink:0, brown:.5*Math.sqrt(1-v), voice:.5*Math.sqrt(v) };
+}
+function applyMix(tc){
+  if(!started) return;
+  const m=modeGains(state.mode), t=ctx.currentTime;
+  for(const k in g) g[k].gain.setTargetAtTime(m[k], t, tc);
+  applyTrim(); applyVolume();
+}
+function applyTrim(){ if(started) trim.gain.setTargetAtTime(trimGain(), ctx.currentTime, .15); }
+function applyEqGains(tc=.15){
+  if(!started) return;
+  const t=ctx.currentTime, tot=totalEq();
+  eqNodes.forEach((b,i)=>b.gain.setTargetAtTime(tot[i], t, tc));
+}
+function applyVolume(){
+  if(!ctx || !state.playing || performance.now()<fadeEnd) return;   // never fight a fade
+  const t=ctx.currentTime;
+  master.gain.cancelScheduledValues(t);
+  master.gain.setTargetAtTime(masterTarget(), t, .1);
+}
+function applyWarmth(){
+  if(ctx) lp.frequency.setTargetAtTime(warmthFreq()*lifeMul, ctx.currentTime, .08);
+  khzOut.textContent=(warmthFreq()/1000).toFixed(1)+' kHz';
+}
+
+/* ---------------- shield (EQ) UI ---------------- */
+let paintQueued=false;
+function requestPaint(){
+  if(paintQueued) return; paintQueued=true;
+  requestAnimationFrame(()=>{ paintQueued=false; paintEq(); paintOffice(); });
+}
+function paintEq(){
+  const y = d => clamp(50 - d/EQ_LIM*50, 0, 100);
+  bandEls.forEach((el,i)=>{
+    const gv=state.eq[i], a=adapt[i];
+    const u=el.querySelector('.band-user'), ad=el.querySelector('.band-adapt');
+    const top=y(Math.max(gv,0)), bot=y(Math.min(gv,0));
+    u.style.top=top+'%'; u.style.height=Math.max(1.2,bot-top)+'%';
+    const at=y(gv+a), ab=y(gv);
+    ad.style.top=at+'%'; ad.style.height=Math.max(0,ab-at)+'%';
+    const txt=(gv>0?'+':'')+(gv%1?gv.toFixed(1):gv);
+    el.querySelector('.band-val').textContent = a>.3 ? txt+'↑' : txt;
+    el.setAttribute('aria-valuenow',gv);
+    el.setAttribute('aria-valuetext', BAND_NAME[i]+': '+txt+' dB'+(a>.3?', adaptativo +'+a.toFixed(1):''));
+  });
+  presetNameEl.textContent=PRESET_NAME[state.preset];
+  $$('.chip[data-p]').forEach(c=>c.classList.toggle('active', c.dataset.p===state.preset));
+  calChip.disabled=!state.calEq;
+}
+function setEq(gains,preset){
+  state.eq=gains.map(v=>clamp(Math.round(v*2)/2,-EQ_LIM,EQ_LIM));
+  state.preset=preset;
+  store.set('eq',state.eq); store.set('preset',preset);
+  applyTrim(); applyEqGains(); applyVolume();
+  requestPaint();
+}
+bandEls.forEach((el,i)=>{
+  const track=el.querySelector('.band-track');
+  const drag=e=>{
+    const r=track.getBoundingClientRect();
+    const fr=clamp((e.clientY-r.top)/r.height,0,1);
+    const v=Math.round((0.5-fr)*2*EQ_LIM*2)/2;
+    if(v!==state.eq[i]){ const n=state.eq.slice(); n[i]=v; setEq(n,'custom'); }
+  };
+  el.addEventListener('pointerdown',e=>{ el.setPointerCapture(e.pointerId); el.focus({preventScroll:true}); drag(e); e.preventDefault(); });
+  el.addEventListener('pointermove',e=>{ if(el.hasPointerCapture(e.pointerId)) drag(e); });
+  el.addEventListener('keydown',e=>{
+    const step={ArrowUp:.5,ArrowRight:.5,ArrowDown:-.5,ArrowLeft:-.5,PageUp:3,PageDown:-3}[e.key];
+    if(step===undefined && e.key!=='Home') return;
+    e.preventDefault(); e.stopPropagation();
+    const n=state.eq.slice(); n[i]= e.key==='Home' ? 0 : clamp(n[i]+step,-EQ_LIM,EQ_LIM); setEq(n,'custom');
+  });
+});
+$$('.chip[data-p]').forEach(c=>c.addEventListener('click',()=>{
+  const p=c.dataset.p;
+  if(p==='cal'){ if(state.calEq) setEq(state.calEq,'cal'); }
+  else setEq(PRESETS[p],p);
+  toast('Escudo: '+PRESET_NAME[p]);
+}));
+
+/* ---------------- microphone, calibration, adaptive ---------------- */
+const mic = { stream:null, srcN:null, an:null, sink:null, buf:null, bins:null, timer:null };
+const det = { floor:null, hist:BANDS.map(()=>[]), score:0, n:0 };
+const cal = { active:false, t0:0, samples:[] };
+const micSupported = () => !!(window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+function micMsg(t,warn){ micNote.textContent=t; micNote.classList.toggle('warn',!!warn); }
+
+async function ensureAudio(){
+  if(!started){
+    try{ buildAudio(); }
+    catch(err){ console.error(err); toast('No se pudo iniciar el audio: '+((err&&err.message)||err)); setStatus('error de audio'); return false; }
+  }
+  selfSuspend=false;
+  try{ await ctx.resume(); }catch(e){}
+  return ctx.state==='running';
+}
+async function micOpen(){
+  if(mic.stream) return true;
+  if(!micSupported()){
+    micMsg(window.isSecureContext
+      ? 'Este navegador no permite usar el micrófono.'
+      : 'El micrófono solo funciona si la app se abre desde una dirección https:// (no como archivo local). El resto de la app funciona igual.', true);
+    return false;
+  }
+  if(!(await ensureAudio())){ toast('El navegador pausó el audio: toca una vez más'); return false; }
+  try{
+    mic.stream = await navigator.mediaDevices.getUserMedia({ audio:{
+      echoCancellation:false, noiseSuppression:false, autoGainControl:false, channelCount:1 } });
+  }catch(e){
+    const msg = e && e.name==='NotAllowedError'
+      ? 'Permiso de micrófono denegado. Actívalo en el candado de la barra de direcciones → Permisos → Micrófono.'
+      : e && e.name==='NotFoundError' ? 'No se encontró un micrófono en este dispositivo.'
+      : 'No se pudo abrir el micrófono: '+((e&&e.message)||e);
+    micMsg(msg,true); return false;
+  }
+  mic.srcN=ctx.createMediaStreamSource(mic.stream);
+  mic.an=ctx.createAnalyser(); mic.an.fftSize=2048; mic.an.smoothingTimeConstant=0;
+  mic.sink=ctx.createGain(); mic.sink.gain.value=0;           // keeps the analyser pulled; outputs silence
+  mic.srcN.connect(mic.an); mic.an.connect(mic.sink); mic.sink.connect(ctx.destination);
+  mic.buf=new Float32Array(mic.an.frequencyBinCount);
+  const hz=ctx.sampleRate/mic.an.fftSize;
+  mic.bins=BANDS.map(f=>[Math.max(1,Math.floor(f/Math.SQRT2/hz)), Math.min(mic.buf.length-1,Math.ceil(f*Math.SQRT2/hz))]);
+  mic.stream.getTracks().forEach(t=>t.addEventListener('ended',()=>{
+    micMsg('El sistema cerró el micrófono.',true); setAdaptive(false,true); micClose();
+  }));
+  mic.timer=setInterval(micTick,50);
+  micMsg('Micrófono activo · se analiza en tu teléfono, no se graba.');
+  return true;
+}
+function micClose(){
+  if(!mic.stream) return;
+  clearInterval(mic.timer); mic.timer=null;
+  try{ mic.srcN.disconnect(); mic.an.disconnect(); mic.sink.disconnect(); }catch(e){}
+  mic.stream.getTracks().forEach(t=>t.stop());
+  mic.stream=null; det.floor=null; det.hist=BANDS.map(()=>[]); det.score=0;
+  if(!micNote.classList.contains('warn')) micMsg('');
+  maybeSuspend();
+}
+function maybeSuspend(){
+  setTimeout(()=>{ if(ctx && !state.playing && !mic.stream && ctx.state==='running'){ selfSuspend=true; ctx.suspend(); } },1600);
+}
+function bandLevels(){
+  mic.an.getFloatFrequencyData(mic.buf);
+  return mic.bins.map(([a,b])=>{
+    let s=0; for(let i=a;i<=b;i++){ const v=mic.buf[i]; if(isFinite(v)) s+=Math.pow(10,v/10); }
+    return 10*Math.log10(s+1e-12);
+  });
+}
+function micTick(){
+  const L=bandLevels();
+  if(cal.active){ calStep(L); return; }
+  if(!state.adaptOn || !state.playing || ctx.state!=='running') return;
+  const s=SENS[state.sens], dt=.05;
+  if(!det.floor) det.floor=L.slice();
+  let maxScore=0;
+  for(let i=0;i<5;i++){
+    const h=det.hist[i]; h.push(L[i]); if(h.length>30) h.shift();          // last 1.5 s
+    // Noise floor: falls quickly to quiet moments, rises slowly (~30 s) to follow a changing room
+    det.floor[i] += (L[i]-det.floor[i]) * (L[i]<det.floor[i] ? .05 : .0015);
+    let mean=0; for(const v of h) mean+=v; mean/=h.length;
+    let sd=0;   for(const v of h) sd+=(v-mean)*(v-mean); sd=Math.sqrt(sd/h.length);
+    // Speech = louder than the floor AND bumpy (syllables); steady sounds, including our own masker, score ~0
+    const score = clamp((mean-det.floor[i]-s.ex)/6,0,1) * clamp((sd-s.fl)/2.5,0,1);
+    const target = score*ADAPT_MAX;
+    adapt[i] += (target-adapt[i]) * dt/(target>adapt[i] ? ADAPT_UP : ADAPT_DOWN);
+    if(score>maxScore) maxScore=score;
+  }
+  det.score = det.score*.8 + maxScore*.2;
+  if(++det.n % 5 === 0){ applyEqGains(.3); applyVolume(); paintIntrusion(); requestPaint(); }
+}
+function paintIntrusion(){
+  const top=Math.max(...adapt);
+  if(!state.adaptOn){ intrOut.textContent = state.adaptPref ? 'se activa al reproducir' : 'apagado'; intrBar.style.width='0%'; return; }
+  intrBar.style.width=Math.round(det.score*100)+'%';
+  intrOut.textContent = top>.4 ? 'cubriendo · +'+top.toFixed(1)+' dB' : det.score>.15 ? 'voces detectadas' : 'ambiente estable';
+}
+async function setAdaptive(on,silent){
+  state.adaptPref=on; store.set('adapt',on); setSwitch(adaptSw,on);
+  if(on && state.playing){
+    if(await micOpen()){ state.adaptOn=true; det.floor=null; det.hist=BANDS.map(()=>[]); if(!silent) toast('Modo adaptativo activo'); setStatus(playingStatus()); }
+    else { state.adaptPref=false; store.set('adapt',false); setSwitch(adaptSw,false); }
+  } else if(!on){
+    state.adaptOn=false;
+    adapt=[0,0,0,0,0]; applyEqGains(1.5); applyVolume(); requestPaint();
+    if(!cal.active) micClose();
+    if(state.playing) setStatus(playingStatus());
+  } else if(!silent){
+    toast('El modo adaptativo se activará al reproducir');
+  }
+  paintIntrusion();
+}
+async function calibrate(){
+  if(cal.active) return;
+  calBtn.disabled=true; calBtn.textContent='ABRIENDO MICRÓFONO…';
+  if(!(await micOpen())){ calBtn.disabled=false; calBtn.textContent='CALIBRAR · 15 S'; return; }
+  cal.active=true; cal.t0=performance.now(); cal.samples=[];
+  duck.gain.setTargetAtTime(0, ctx.currentTime, .15);         // silence our own noise so the mic hears only the room
+  calBtn.textContent='ESCUCHANDO…'; calNote.classList.remove('warn');
+  calNote.textContent='Escuchando la sala. Deja el teléfono quieto, cerca de donde trabajas.';
+  if(state.playing) setStatus('calibrando');
+}
+function calStep(L){
+  cal.samples.push(L);
+  const p=clamp((performance.now()-cal.t0)/CAL_MS,0,1);
+  calBar.style.width=(p*100)+'%';
+  if(p>=1) finishCal();
+}
+function finishCal(){
+  cal.active=false;
+  duck.gain.setTargetAtTime(1, ctx.currentTime, .6);
+  calBtn.disabled=false; calBtn.textContent='CALIBRAR · 15 S';
+  setTimeout(()=>{ calBar.style.width='0%'; },900);
+  const S=cal.samples, n=S.length;
+  if(n<40){ calNote.textContent='La medición se interrumpió. Inténtalo de nuevo con la pantalla encendida.'; calNote.classList.add('warn'); }
+  else{
+    const p20=[], act=[];
+    for(let i=0;i<5;i++){
+      const v=S.map(r=>r[i]).sort((a,b)=>a-b), base=v[Math.floor(n*.2)];
+      p20.push(base);
+      act.push(v.reduce((s,x)=>s+Math.max(0,x-base),0)/n);   // intermittent energy above the steady floor
+    }
+    const maxA=Math.max(...act);
+    if(maxA<1.2){
+      calNote.textContent='No se detectaron voces en estos 15 s. Repite la calibración mientras la conversación esté ocurriendo.';
+      calNote.classList.add('warn');
+    } else {
+      // Shape relative to the average band: the dominant bands go up, the rest stay near neutral
+      const r=act.map(a=>a/maxA), mr=r.reduce((x,y)=>x+y,0)/5;
+      const gains=r.map(v=>clamp(2+9*(v-mr),-4,6));
+      setEq(gains,'cal');
+      state.calEq=state.eq.slice(); store.set('calEq',state.calEq);
+      const top=act.map((a,i)=>[a,i]).sort((a,b)=>b[0]-a[0]).slice(0,2).map(x=>BAND_NAME[x[1]]);
+      calNote.textContent='Listo. Las voces de tu sala se concentran en '+top.join(' y ')+'; el escudo las refuerza. Puedes volver a este ajuste con «Calibrado».';
+      calNote.classList.remove('warn');
+      toast('Escudo calibrado para esta sala');
+    }
+    if(state.adaptOn){ det.floor=p20.slice(); det.hist=BANDS.map(()=>[]); }
+  }
+  if(state.playing) setStatus(playingStatus());
+  if(!state.adaptOn) micClose();
+  requestPaint();
+}
+
+/* ---------------- Android: media session + wake lock ---------------- */
+// A silent looping <audio> gives Chrome a media session: lock-screen / notification controls,
+// and the page is treated as an active media player while it runs.
+const media = (()=>{
+  let el=null, ours=false;
+  function silentWav(){
+    const sr=8000, n=sr*10, buf=new ArrayBuffer(44+n), v=new DataView(buf);
+    const w=(o,s)=>{ for(let i=0;i<s.length;i++) v.setUint8(o+i,s.charCodeAt(i)); };
+    w(0,'RIFF'); v.setUint32(4,36+n,true); w(8,'WAVE'); w(12,'fmt '); v.setUint32(16,16,true);
+    v.setUint16(20,1,true); v.setUint16(22,1,true); v.setUint32(24,sr,true); v.setUint32(28,sr,true);
+    v.setUint16(32,1,true); v.setUint16(34,8,true); w(36,'data'); v.setUint32(40,n,true);
+    new Uint8Array(buf,44).fill(128);
+    return URL.createObjectURL(new Blob([buf],{type:'audio/wav'}));
+  }
+  function ensure(){
+    if(el) return el;
+    el=new Audio(silentWav()); el.loop=true;
+    el.addEventListener('pause',()=>{ if(ours){ ours=false; return; } if(state.playing) stop(); }); // system took audio focus
+    return el;
+  }
+  function session(st){
+    if(!('mediaSession' in navigator)) return;
+    try{
+      navigator.mediaSession.metadata = new MediaMetadata({ title:'Modo '+MODE_NAME[state.mode], artist:'HUSH ARCHIVE 2.0', album:'Escudo: '+PRESET_NAME[state.preset] });
+      navigator.mediaSession.playbackState = st;
+    }catch(e){}
+  }
+  if('mediaSession' in navigator){
+    const set=(a,f)=>{ try{ navigator.mediaSession.setActionHandler(a,f); }catch(e){} };
+    set('play',()=>start()); set('pause',()=>stop()); set('stop',()=>stop());
+  }
+  return {
+    play(){ try{ ensure().play().catch(()=>{}); }catch(e){} session('playing'); },
+    pause(){ if(el && !el.paused){ ours=true; el.pause(); } session('paused'); },
+    refresh(){ session(state.playing?'playing':'paused'); }
+  };
+})();
+const wake = {
+  s:null,
+  async sync(){
+    const want = state.wake && state.playing && !document.hidden;
+    if(want && !this.s && 'wakeLock' in navigator){
+      try{ this.s=await navigator.wakeLock.request('screen'); this.s.addEventListener('release',()=>{ this.s=null; }); }catch(e){}
+    } else if(!want && this.s){ try{ await this.s.release(); }catch(e){} this.s=null; }
+  }
+};
+function onCtxState(){
+  if(!state.playing) return;
+  if(ctx.state==='running') setStatus(playingStatus());
+  else if(!selfSuspend){ setStatus('interrumpido'); toast('El sistema pausó el audio (llamada u otra app). Toca el botón para reanudar.'); }
+}
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden){
+    flagTitle(false);
+    if(state.playing && ctx && ctx.state!=='running') ctx.resume().catch(()=>{});
+  }
+  wake.sync();
+});
+
+/* ---------------- transport ---------------- */
+async function start(){
+  if(state.playing) return;
+  if(!(await ensureAudio())){ if(started) toast('El navegador pausó el sonido: toca el botón una vez más'); return; }
+  state.playing=true;
+  state.run=0; state.nextBreak=BREAK_SECONDS; flagTitle(false);
+  document.body.classList.add('playing'); playBtn.setAttribute('aria-label','Pausar');
+  const t=ctx.currentTime;
+  master.gain.cancelScheduledValues(t);
+  master.gain.setValueAtTime(master.gain.value, t);
+  master.gain.linearRampToValueAtTime(masterTarget(), t+3);
+  fadeEnd=performance.now()+3100;
+  setStatus('subiendo');
+  setTimeout(()=>{ if(state.playing){ applyVolume(); if(!cal.active) setStatus(playingStatus()); } },3150);
+  media.play(); wake.sync();
+  if(state.adaptPref) setAdaptive(true,true);
+  if(!selfTestDone){
+    selfTestDone=true;
+    setTimeout(()=>{
+      if(!state.playing || !ctx || cal.active) return;
+      const a=new Float32Array(anL.fftSize); anL.getFloatTimeDomainData(a);
+      let s=0; for(let i=0;i<a.length;i++) s+=a[i]*a[i];
+      if(Math.sqrt(s/a.length)<2e-4) toast('El motor suena pero los medidores están en silencio: revisa el volumen del teléfono o sube el NIVEL');
+    },4500);
+  }
+}
+function stop(){
+  if(!state.playing) return;
+  state.playing=false;
+  document.body.classList.remove('playing'); playBtn.setAttribute('aria-label','Reproducir');
+  flagTitle(false); setStatus('bajando');
+  if(cal.active){ cal.samples=[]; finishCal(); }
+  if(state.adaptOn){ state.adaptOn=false; adapt=[0,0,0,0,0]; applyEqGains(.5); micClose(); paintIntrusion(); requestPaint(); }
+  const t=ctx.currentTime;
+  master.gain.cancelScheduledValues(t);
+  master.gain.setValueAtTime(master.gain.value, t);
+  master.gain.linearRampToValueAtTime(.0001, t+1.4);
+  fadeEnd=0;
+  media.pause(); wake.sync();
+  setTimeout(()=>{
+    if(!state.playing){ if(!mic.stream){ selfSuspend=true; ctx.suspend(); } setStatus('en espera'); dbOut.textContent='—'; }
+  },1500);
+}
+function toggle(){
+  if(state.playing && ctx && ctx.state!=='running'){        // interrupted by the system: resume instead of stopping
+    ctx.resume().then(()=>setStatus(playingStatus())).catch(()=>{}); media.play(); return;
+  }
+  state.playing ? stop() : start();
+}
+
+/* ---------------- modes ---------------- */
+function renderWord(m){
+  bigWord.classList.remove('go');
+  bigWord.innerHTML=[...MODE_NAME[m]].map((c,i)=>`<span style="--i:${i}">${c}</span>`).join('')
+                  + `<span class="dot" style="--i:${MODE_NAME[m].length}">.</span>`;
+  modeLine.textContent=MODE_COPY[m].line;
+  requestAnimationFrame(()=>requestAnimationFrame(()=>bigWord.classList.add('go')));
+}
+function setMode(m,quiet=false){
+  if(m===state.mode) return;
+  state.mode=m; store.set('mode',m);
+  document.body.dataset.mode=m;
+  renderWord(m);
+  $$('.mode-btn').forEach(b=>b.classList.toggle('active', b.dataset.m===m));
+  if(started){ applyMix(.35); if(state.playing && !cal.active) setTimeout(()=>{ if(state.playing) setStatus(playingStatus()); },1300); }
+  media.refresh();
+  if(!quiet) toast(MODE_COPY[m].toast);
+}
+
+/* ---------------- controls ---------------- */
+playBtn.addEventListener('click', toggle);
+$$('.mode-btn').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.m)));
+volRange.addEventListener('input',()=>{ state.vol=+volRange.value; paintRange(volRange); store.set('vol',state.vol); applyVolume(); });
+warmRange.addEventListener('input',()=>{ state.warm=+warmRange.value; paintRange(warmRange); store.set('warm',state.warm); applyWarmth(); requestPaint(); });
+blendRange.addEventListener('input',()=>{
+  state.vblend=+blendRange.value; paintRange(blendRange); store.set('vblend',state.vblend);
+  blendOut.textContent=state.vblend+' / '+(100-state.vblend);
+  if(state.mode==='office') applyMix(.12);
+  requestPaint();
+});
+calBtn.addEventListener('click', calibrate);
+adaptSw.addEventListener('click',()=>setAdaptive(!state.adaptPref));
+$$('.chip[data-s]').forEach(c=>c.addEventListener('click',()=>{
+  state.sens=c.dataset.s; store.set('sens',state.sens);
+  $$('.chip[data-s]').forEach(x=>x.classList.toggle('active',x===c));
+}));
+texSw.addEventListener('click',()=>{
+  state.texture=!state.texture; store.set('texture',state.texture); setSwitch(texSw,state.texture); lifeNext=0;
+});
+wakeSw.addEventListener('click',()=>{
+  if(!('wakeLock' in navigator)){ devNote.textContent='Este navegador no permite mantener la pantalla encendida.'; return; }
+  state.wake=!state.wake; store.set('wake',state.wake); setSwitch(wakeSw,state.wake); wake.sync();
+});
+
+/* Office curve on the chart: the real shape of the generator mix × shield (user + adaptive) × warmth.
+   Shape only (not absolute level): the curve's highest point is pinned at −3 dB. */
+const xOf = f => 60 + 580*Math.log10(f/20)/3;
+const yOf = db => 53.6 - db*3.7133;
+function paintOffice(){
+  const tot=totalEq(), fc=warmthFreq(), fs=[], dbs=[];
+  for(let i=0;i<=60;i++){
+    const f=20*Math.pow(1000,i/60);
+    fs.push(f); dbs.push(10*Math.log10(mixPSD(f,'office')*eqPow2(f,tot)*lp2(f,fc)));
+  }
+  const shift=-3-Math.max(...dbs);
+  lineOfficeEl.setAttribute('d','M'+fs.map((f,i)=>xOf(f).toFixed(1)+' '+yOf(clamp(dbs[i]+shift,-62,4)).toFixed(1)).join(' L'));
+  officeLbl.textContent='oficina 2.0 · voz '+state.vblend+' + rumor '+(100-state.vblend);
+}
+function updateChips(){ $$('.chip[data-min]').forEach(c=>c.classList.toggle('active',(+c.dataset.min*60)===state.total)); }
+$$('.chip[data-min]').forEach(c=>c.addEventListener('click',()=>{
+  const m=+c.dataset.min;
+  if(m===0){ state.total=0; state.remaining=null; showRing(false); cdOut.textContent='sin temporizador'; }
+  else { state.total=m*60; state.remaining=m*60; showRing(true); cdOut.textContent=fmt(m*60)+' restantes'; toast('Temporizador de '+m+' min listo'); }
+  store.set('timer',m); updateChips();
+}));
+$$('.row.click').forEach(r=>{
+  const go=()=>{
+    if(r.dataset.m===state.mode) toast('ya está cargado: toca el botón grande');
+    else setMode(r.dataset.m);
+    window.scrollTo({top:0,behavior:'smooth'});
+  };
+  r.addEventListener('click',go);
+  r.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); e.stopPropagation(); go(); } });
+});
+$('#linePink').addEventListener('click',()=>setMode('pink'));
+$('#lineBrown').addEventListener('click',()=>setMode('brown'));
+lineOfficeEl.addEventListener('click',()=>setMode('office'));
+$('#lineWhite').addEventListener('click',()=>toast('el ruido blanco no se ofrece: demasiado áspero para sesiones largas'));
+addEventListener('keydown',e=>{
+  const t=e.target;
+  if(e.code==='Space'){
+    if(t.tagName==='BUTTON'||t.tagName==='INPUT'||(t.classList&&(t.classList.contains('row')||t.classList.contains('band')))) return;
+    e.preventDefault(); toggle();
+  }
+  else if(e.key==='1') setMode('pink');
+  else if(e.key==='2') setMode('brown');
+  else if(e.key==='3') setMode('office');
+});
+
+/* ---------------- oscilloscope + meters ---------------- */
+function sizeScope(){
+  const r=stage.getBoundingClientRect();
+  dpr=Math.min(matchMedia('(max-width:760px)').matches?1.5:2, devicePixelRatio||1);
+  scope.width=r.width*dpr; scope.height=r.height*dpr; W=r.width; H=r.height;
+  s2.setTransform(dpr,0,0,dpr,0,0);
+}
+addEventListener('resize',sizeScope);
+let mLv=0, mRv=0;
+function trace(data,yMid,alpha,lw,glow){
+  s2.beginPath(); let peak=0; const n=data.length;
+  for(let x=0;x<=W;x+=2){
+    const i=Math.min(n-1,(x/W*n)|0), v=data[i], av=v<0?-v:v;
+    if(av>peak) peak=av;
+    const y=yMid-Math.max(-1,Math.min(1,v))*H*.36;
+    x ? s2.lineTo(x,y) : s2.moveTo(x,y);
+  }
+  s2.lineWidth=lw; s2.strokeStyle=rgbaCol(alpha); s2.shadowBlur=glow?16:0; s2.shadowColor=rgbaCol(.7);
+  s2.stroke(); s2.shadowBlur=0;
+  return peak;
+}
+function drawScope(){
+  s2.clearRect(0,0,W,H);
+  col.r+=(PAL[state.mode].r-col.r)*.06; col.g+=(PAL[state.mode].g-col.g)*.06; col.b+=(PAL[state.mode].b-col.b)*.06;
+  s2.strokeStyle='rgba(243,228,213,.10)'; s2.lineWidth=1; s2.setLineDash([2,7]);
+  s2.beginPath(); s2.moveTo(0,H*.5); s2.lineTo(W,H*.5); s2.stroke(); s2.setLineDash([]);
+  if(started && state.playing){
+    anL.getFloatTimeDomainData(waveL); anR.getFloatTimeDomainData(waveR);
+    mRv=Math.max(mRv*.88, trace(waveR,H*.5+16,.30,1,false)*1.7);
+    mLv=Math.max(mLv*.88, trace(waveL,H*.5,.95,1.7,true)*1.7);
+    if(performance.now()-lastDb>250){
+      lastDb=performance.now();
+      let sL=0,sR=0; for(let i=0;i<1024;i+=4){ sL+=waveL[i]*waveL[i]; sR+=waveR[i]*waveR[i]; }
+      const rms=Math.sqrt((sL+sR)/512);
+      dbOut.textContent = rms>5e-4 ? '≈ '+Math.round(94+20*Math.log10(rms*1.4142))+' dB' : '—';
+    }
+  } else {
+    const t=performance.now(); s2.beginPath();
+    for(let x=0;x<=W;x+=2){ const y=H*.5+Math.sin(x*.02+t*.0016)*2.6+Math.sin(x*.045-t*.0009)*1.3; x?s2.lineTo(x,y):s2.moveTo(x,y); }
+    s2.strokeStyle='rgba(243,228,213,.30)'; s2.lineWidth=1; s2.stroke();
+    mLv*=.9; mRv*=.9;
+  }
+  mL.style.transform=`scaleY(${Math.min(1,mLv)})`;
+  mR.style.transform=`scaleY(${Math.min(1,mRv)})`;
+}
+
+/* ---------------- clock (setInterval: keeps running in background while audio plays) ---------------- */
+function lifeTick(){
+  if(!started || !state.playing) return;
+  const now=performance.now(); if(now<lifeNext) return;
+  lifeNext=now+3000+Math.random()*4000;
+  const t=ctx.currentTime;
+  if(state.texture){
+    life.gain.setTargetAtTime(Math.pow(10,-Math.random()*1.8/20), t, 1.6);   // only ever turns down: cap holds
+    lifeMul=.85+Math.random()*.25;
+  } else { life.gain.setTargetAtTime(1,t,.8); lifeMul=1; }
+  lp.frequency.setTargetAtTime(warmthFreq()*lifeMul, t, 2);
+}
+function tick(){
+  const now=performance.now(), dt=(now-lastTick)/1000; lastTick=now;
+  if(!state.playing) return;
+  state.elapsed+=dt; state.run+=dt;
+  elapsedEl.textContent=fmt(state.elapsed);
+  lifeTick();
+  if(state.run>=state.nextBreak){
+    state.nextBreak+=BREAK_SECONDS;
+    toast(Math.round(state.run/60)+' min seguidos enmascarando: sácate los audífonos diez minutos');
+    if(document.hidden) flagTitle(true);
+  }
+  if(state.total){
+    state.remaining-=dt;
+    if(state.remaining<=0){
+      state.remaining=0; state.total=0; showRing(false); cdOut.textContent='temporizador completo';
+      store.set('timer',0); updateChips(); stop(); toast('Temporizador completo: en espera');
+    } else {
+      ringFg.style.strokeDashoffset=100-(state.remaining/state.total)*100;
+      cdOut.textContent=fmt(state.remaining)+' restantes';
+    }
+  }
+}
+function loop(){ drawScope(); requestAnimationFrame(loop); }
+
+/* ---------------- reveals ---------------- */
+const io=new IntersectionObserver(es=>{ es.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } }); },{threshold:.18});
+$$('.reveal').forEach(el=>io.observe(el));
+
+/* ---------------- init ---------------- */
+document.body.dataset.mode=state.mode;
+renderWord(state.mode);
+$$('.mode-btn').forEach(b=>b.classList.toggle('active', b.dataset.m===state.mode));
+blendRange.value=state.vblend; paintRange(blendRange); blendOut.textContent=state.vblend+' / '+(100-state.vblend);
+volRange.value=state.vol; paintRange(volRange);
+warmRange.value=state.warm; paintRange(warmRange); applyWarmth();
+setSwitch(adaptSw,state.adaptPref); setSwitch(texSw,state.texture); setSwitch(wakeSw,state.wake);
+$$('.chip[data-s]').forEach(c=>c.classList.toggle('active',c.dataset.s===state.sens));
+if(state.timer>0){ state.total=state.timer*60; state.remaining=state.timer*60; showRing(true); cdOut.textContent=fmt(state.timer*60)+' restantes'; }
+updateChips(); paintEq(); paintOffice(); paintIntrusion();
+if(!micSupported()) micMsg(window.isSecureContext
+  ? 'Este navegador no permite usar el micrófono: calibración y modo adaptativo no disponibles.'
+  : 'Calibración y modo adaptativo necesitan abrir la app desde una dirección https://. Todo lo demás funciona.', true);
+if(!('wakeLock' in navigator)) devNote.textContent='Este navegador no permite mantener la pantalla encendida.';
+sizeScope();
+setInterval(tick,250);
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
