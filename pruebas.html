@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<!-- HUSH ARCHIVE · laboratorio del detector. Usa exactamente el mismo detector que la app: lo lee de index.html
+     (bloque <script type="text/plain" id="hush-detector-src">). Todo se procesa en el navegador; nada se sube. -->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1a1109">
+<meta name="color-scheme" content="dark">
+<title>HUSH ARCHIVE — laboratorio del detector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=IBM+Plex+Mono:wght@400;500&family=Schibsted+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#1a1109; --panel:#251912; --line:rgba(243,228,213,.11); --ink:#f3e7da; --muted:#a88e7c; --faint:#6f5b4e;
+  --acc:#e5977f; --acc2:#f0bfae; --acc-ink:#2a110b; --glow:229,151,127;
+  --serif:"Fraunces",Georgia,"Times New Roman",serif;
+  --sans:"Schibsted Grotesk",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"Roboto Mono",Menlo,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased;
+  padding:max(18px,env(safe-area-inset-top)) max(5vw,env(safe-area-inset-right)) max(40px,env(safe-area-inset-bottom)) max(5vw,env(safe-area-inset-left))}
+:focus-visible{outline:2px solid var(--acc);outline-offset:3px;border-radius:6px}
+button,input,select{font-family:inherit;color:inherit}
+button{background:none;border:0;cursor:pointer}
+a{color:var(--acc2);text-underline-offset:3px}
+.wrap{max-width:1100px;margin:0 auto}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-bottom:14px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:12px;letter-spacing:.16em;color:var(--muted)}
+h1{font-family:var(--serif);font-weight:380;font-size:clamp(2rem,5vw,3rem);line-height:1.05;margin:28px 0 10px}
+.lead{color:var(--muted);max-width:64ch}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px 18px 16px;margin-top:22px}
+.label{font-family:var(--mono);font-size:10px;letter-spacing:.26em;color:var(--faint);margin-bottom:12px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap}
+.chip{font-family:var(--mono);font-size:11px;letter-spacing:.08em;padding:9px 14px;min-height:40px;border:1px solid var(--line);border-radius:999px;color:var(--muted);transition:.25s}
+.chip.active{background:var(--acc);border-color:var(--acc);color:var(--acc-ink);font-weight:500}
+.chip:disabled{opacity:.4;cursor:default}
+.act{font-family:var(--mono);font-size:11px;letter-spacing:.08em;padding:10px 16px;min-height:42px;border:1px solid rgba(var(--glow),.55);border-radius:999px;background:rgba(var(--glow),.08);color:var(--ink)}
+.act:disabled{opacity:.45;cursor:default}
+.row{display:flex;gap:10px 14px;align-items:center;flex-wrap:wrap;margin-top:12px}
+.note{font-size:13px;color:var(--muted);margin-top:10px;max-width:70ch}
+.note.warn{color:var(--acc2)}
+.file{font-size:13px;color:var(--muted)}
+.file::file-selector-button{font-family:var(--mono);font-size:11px;letter-spacing:.08em;padding:9px 14px;margin-right:10px;border:1px solid rgba(var(--glow),.55);border-radius:999px;background:rgba(var(--glow),.08);color:var(--ink)}
+.params{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px 24px;margin-top:14px}
+.prm .rb{display:flex;justify-content:space-between;align-items:baseline;font-size:13px}
+.prm .rb b{font-family:var(--mono);font-weight:500;color:var(--acc2)}
+.prm small{display:block;color:var(--faint);font-size:11.5px;margin-top:2px}
+input[type=range]{width:100%;accent-color:var(--acc);height:28px}
+.plotwrap{position:relative;margin-top:14px}
+canvas#plot{width:100%;height:420px;display:block;border-radius:10px;background:#1f150e;touch-action:pan-y}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:12px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+audio{width:100%;margin-top:12px;height:40px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:14px}
+.stat{border:1px solid var(--line);border-radius:12px;padding:12px}
+.stat b{display:block;font-family:var(--serif);font-weight:400;font-size:1.6rem;line-height:1.1}
+.stat span{font-size:12px;color:var(--muted)}
+.spec{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:14px;max-width:520px}
+.spec div{display:flex;flex-direction:column;align-items:center;gap:4px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.spec .bar{position:relative;width:100%;max-width:42px;height:110px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:rgba(243,228,213,.04)}
+.spec .bar i{position:absolute;left:18%;right:18%;bottom:0;background:var(--acc);border-radius:3px 3px 0 0}
+ol.howto{margin:10px 0 0 20px;color:var(--muted);font-size:13.5px;max-width:70ch}
+ol.howto li{margin-top:6px}
+.progress{height:3px;background:rgba(243,228,213,.08);border-radius:2px;overflow:hidden;margin-top:12px}
+.progress i{display:block;height:100%;width:0;background:var(--acc)}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translate(-50%,16px);opacity:0;pointer-events:none;
+  background:#2c1d13;border:1px solid rgba(var(--glow),.5);padding:11px 18px;border-radius:999px;font-family:var(--mono);font-size:12px;transition:.3s;max-width:calc(100vw - 32px);text-align:center}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top"><a href="./">← volver a la app</a><span>LABORATORIO DEL DETECTOR</span></header>
+
+  <h1>¿Qué está escuchando el detector?</h1>
+  <p class="lead">Prueba el detector de voz de la app con grabaciones de tu propia oficina o con el micrófono en vivo, mira cada señal que usa para decidir y ajusta los umbrales. El audio se procesa en este teléfono y nunca sale de él.</p>
+  <p class="note warn" id="loadNote">Cargando el detector desde index.html…</p>
+  <div class="row" id="manualLoad" hidden>
+    <span class="note">Si abriste esta página como archivo local, elige tu index.html:</span>
+    <input type="file" class="file" id="srcFile" accept=".html,text/html">
+  </div>
+
+  <section class="panel">
+    <p class="label">FUENTE</p>
+    <div class="tabs">
+      <button class="chip active" data-src="file">Grabación</button>
+      <button class="chip" data-src="live">Micrófono en vivo</button>
+    </div>
+    <div id="fileUI">
+      <div class="row"><input type="file" class="file" id="audioFile" accept="audio/*,video/*"></div>
+      <div class="progress" hidden id="prog"><i id="progBar"></i></div>
+      <p class="note" id="fileNote">Elige una grabación (m4a, mp3, wav, ogg…). Sirve cualquiera hecha con la grabadora del teléfono.</p>
+      <audio id="player" controls hidden></audio>
+    </div>
+    <div id="liveUI" hidden>
+      <div class="row">
+        <button class="act" id="liveBtn">EMPEZAR A ESCUCHAR</button>
+        <span class="note" id="liveNote" style="margin-top:0">Muestra los últimos 30 s.</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <p class="label">SEÑALES DEL DETECTOR</p>
+    <div class="plotwrap"><canvas id="plot"></canvas></div>
+    <div class="legend">
+      <span><i style="background:#e5977f"></i>probabilidad de voz (franja intensa: voz · tenue: sostiene)</span>
+      <span><i style="background:#f293a9"></i>refuerzo por banda 250 → 4k (0–6 dB)</span>
+      <span><i style="background:#9fd3c7"></i>razón de modulación 2–8 Hz</span>
+      <span><i style="background:#d29a5e"></i>profundidad de modulación</span>
+      <span><i style="background:#c9b8f0"></i>nivel sobre el ruido de fondo (dB)</span>
+      <span><i style="background:rgba(243,228,213,.5)"></i>umbral</span>
+    </div>
+    <div class="stats" id="stats" hidden>
+      <div class="stat"><b id="stDur">—</b><span>duración</span></div>
+      <div class="stat"><b id="stVoice">—</b><span>del tiempo con voz detectada</span></div>
+      <div class="stat"><b id="stEvents">—</b><span>veces que se activó</span></div>
+      <div class="stat"><b id="stBoost">—</b><span>refuerzo medio (máx.)</span></div>
+    </div>
+    <div id="specBox" hidden>
+      <p class="note">Espectro de la voz que encontró en esta grabación (relativo entre bandas, ya restado el ruido de fondo). Es lo que la calibración usaría para dar forma al escudo:</p>
+      <div class="spec" id="spec"></div>
+      <p class="note" id="specNote"></p>
+    </div>
+    <div class="row" id="fileActions" hidden>
+      <button class="act" id="csvBtn">DESCARGAR CSV</button>
+      <span class="note" style="margin-top:0">10 filas por segundo, para revisarlo en Excel o Power BI.</span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <p class="label">AJUSTES DEL DETECTOR</p>
+    <div class="tabs" id="presets">
+      <button class="chip" data-s="low">BAJA</button>
+      <button class="chip active" data-s="mid">MEDIA</button>
+      <button class="chip" data-s="high">ALTA</button>
+      <button class="chip" data-s="custom" hidden>PROPIA</button>
+    </div>
+    <div class="params">
+      <label class="prm"><span class="rb">Razón de modulación mínima <b id="vRatio"></b></span>
+        <input type="range" id="pRatio" min=".2" max=".8" step=".01">
+        <small>Qué parte del vaivén del sonido cae en el ritmo de sílabas. Voz ≈ 0,6–0,9; ventilación, teclado y golpes ≈ 0,2–0,35.</small></label>
+      <label class="prm"><span class="rb">Profundidad mínima <b id="vDepth"></b></span>
+        <input type="range" id="pDepth" min=".08" max=".5" step=".01">
+        <small>Cuánto sube y baja la energía al ritmo de las sílabas.</small></label>
+      <label class="prm"><span class="rb">Nivel mínimo sobre el fondo <b id="vSnr"></b></span>
+        <input type="range" id="pSnr" min="0" max="8" step=".5">
+        <small>dB por encima del ruido de fondo de la banda. Más bajo detecta voces más débiles.</small></label>
+      <label class="prm"><span class="rb">Sostener tras la voz <b id="vHold"></b></span>
+        <input type="range" id="pHold" min="0" max="8" step=".5">
+        <small>Segundos que el escudo se mantiene arriba en las pausas entre frases.</small></label>
+    </div>
+    <div class="row">
+      <button class="act" id="saveBtn">USAR ESTOS AJUSTES EN LA APP</button>
+      <span class="note" style="margin-top:0">Aparecerán como sensibilidad «PROPIA» en el modo adaptativo.</span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <p class="label">CÓMO HACER BUENAS GRABACIONES DE PRUEBA</p>
+    <ol class="howto">
+      <li>Usa la grabadora del teléfono, con el teléfono donde normalmente trabajas.</li>
+      <li>Graba 1 a 3 minutos de cada situación por separado: la conversación que te molesta, solo el teclado, la sala en calma, y una mezcla.</li>
+      <li>Revisa que la franja de voz se active en la conversación y no en las otras. Si falla, mueve un umbral a la vez y mira el efecto en el gráfico.</li>
+      <li>Cuando quede bien, toca «Usar estos ajustes en la app».</li>
+    </ol>
+  </section>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(() => {
+'use strict';
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const store={ get(k,d){ try{ const v=localStorage.getItem('ha_'+k); return v==null?d:JSON.parse(v);}catch(e){return d;} },
+              set(k,v){ try{ localStorage.setItem('ha_'+k,JSON.stringify(v)); }catch(e){} } };
+let toastT=null;
+function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),3500); }
+const BAND_NAME=['250 Hz','500 Hz','1 kHz','2 kHz','4 kHz'];
+const BCOL=['#f7c2cd','#f293a9','#e5977f','#d29a5e','#b07a46'];
+
+let SRC=null, DET=null, params=null, sens='mid';
+const sliders={ ratioMin:['#pRatio','#vRatio',v=>v.toFixed(2)], modMin:['#pDepth','#vDepth',v=>v.toFixed(2)],
+                snrMin:['#pSnr','#vSnr',v=>v.toFixed(1)+' dB'], hold:['#pHold','#vHold',v=>v.toFixed(1)+' s'] };
+
+/* ---------- load the detector source from index.html ---------- */
+function useSource(text, where){
+  const doc=new DOMParser().parseFromString(text,'text/html'), el=doc.getElementById('hush-detector-src');
+  if(!el) throw new Error('el archivo no contiene el detector (¿es la versión 2.1 o superior?)');
+  SRC=el.textContent;
+  DET=new Function(SRC+'\nreturn { HushFeatures, HushDecider, HUSH_SENS };')();
+  $('#loadNote').textContent='Detector cargado desde '+where+'. Es el mismo código que usa la app.';
+  $('#loadNote').classList.remove('warn'); $('#manualLoad').hidden=true;
+  const c=store.get('detParams',null); $('[data-s="custom"]').hidden=!c;
+  const s0=store.get('sens','mid'); setPreset(c && s0==='custom' ? 'custom' : (DET.HUSH_SENS[s0]?s0:'mid'));
+}
+fetch('./index.html',{cache:'no-store'}).then(r=>{ if(!r.ok) throw new Error(r.status); return r.text(); })
+  .then(t=>useSource(t,'index.html'))
+  .catch(()=>{ $('#loadNote').textContent='No pude leer index.html automáticamente (pasa al abrir la página como archivo local).'; $('#manualLoad').hidden=false; });
+$('#srcFile').addEventListener('change',async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  try{ useSource(await f.text(), f.name); }catch(err){ $('#loadNote').textContent='No sirve ese archivo: '+err.message; }
+});
+
+/* ---------- parameters ---------- */
+function setPreset(k){
+  sens=k;
+  params=Object.assign({}, k==='custom' ? store.get('detParams',DET.HUSH_SENS.mid) : DET.HUSH_SENS[k]);
+  $$('#presets .chip').forEach(c=>c.classList.toggle('active',c.dataset.s===k));
+  syncSliders(); paramsChanged();
+}
+function syncSliders(){
+  for(const k in sliders){ const [inp,out,f]=sliders[k]; $(inp).value=params[k]; $(out).textContent=f(+params[k]); }
+}
+$$('#presets .chip').forEach(c=>c.addEventListener('click',()=>{ if(DET) setPreset(c.dataset.s); }));
+for(const k in sliders){
+  const [inp,out,f]=sliders[k];
+  $(inp).addEventListener('input',()=>{
+    params[k]=+$(inp).value; $(out).textContent=f(params[k]);
+    sens='edited'; $$('#presets .chip').forEach(c=>c.classList.remove('active'));
+    paramsChanged();
+  });
+}
+let rerunT=null;
+function paramsChanged(){
+  if(live.node) live.node.port.postMessage({type:'params',params});
+  if(fileData){ clearTimeout(rerunT); rerunT=setTimeout(decide,60); }
+}
+$('#saveBtn').addEventListener('click',()=>{
+  if(!params) return;
+  store.set('detParams',params); store.set('sens','custom');
+  $('[data-s="custom"]').hidden=false;
+  toast('Guardado: la app usará la sensibilidad PROPIA');
+});
+
+/* ---------- source tabs ---------- */
+let mode='file';
+$$('[data-src]').forEach(c=>c.addEventListener('click',()=>{
+  mode=c.dataset.src;
+  $$('[data-src]').forEach(x=>x.classList.toggle('active',x===c));
+  $('#fileUI').hidden=mode!=='file'; $('#liveUI').hidden=mode!=='live';
+  $('#stats').hidden = mode!=='file' || !fileData; $('#specBox').hidden = mode!=='file' || !fileData; $('#fileActions').hidden = mode!=='file' || !fileData;
+  if(mode!=='live') stopLive();
+  draw();
+}));
+
+/* ---------- file analysis ---------- */
+let actx=null, fileData=null, frames=null, player=$('#player');
+const getCtx=()=>actx||(actx=new (window.AudioContext||window.webkitAudioContext)());
+$('#audioFile').addEventListener('change',async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  if(!DET){ toast('Primero hay que cargar el detector'); return; }
+  $('#fileNote').textContent='Decodificando '+f.name+'…'; $('#fileNote').classList.remove('warn');
+  let buf;
+  try{ buf=await getCtx().decodeAudioData(await f.arrayBuffer()); }
+  catch(err){ $('#fileNote').textContent='Chrome no pudo leer ese formato. Prueba con m4a, mp3 o wav.'; $('#fileNote').classList.add('warn'); return; }
+  const n=buf.length, sr=buf.sampleRate, x=new Float32Array(n);
+  for(let c=0;c<buf.numberOfChannels;c++){ const d=buf.getChannelData(c); for(let i=0;i<n;i++) x[i]+=d[i]/buf.numberOfChannels; }
+  // stage 1 (expensive): filter bank, in slices so the page stays responsive
+  const fx=new DET.HushFeatures(sr), P=[];
+  fx.onFrame=p=>P.push(Float32Array.from(p));
+  $('#prog').hidden=false;
+  const step=sr*2;
+  for(let off=0;off<n;off+=step){
+    const end=Math.min(n,off+step);
+    for(let i=off;i<end;i+=128) fx.process(x.subarray(i,Math.min(end,i+128)));
+    $('#progBar').style.width=(end/n*100)+'%';
+    $('#fileNote').textContent='Analizando… '+Math.round(end/n*100)+' %';
+    await new Promise(r=>setTimeout(r,0));
+  }
+  $('#prog').hidden=true;
+  fileData={ name:f.name, sr, P, frameRate:fx.frameRate, dur:n/sr };
+  if(player.src) URL.revokeObjectURL(player.src);
+  player.src=URL.createObjectURL(f); player.hidden=false;
+  $('#fileNote').textContent=f.name+' · '+fmtT(n/sr)+'. Toca el gráfico para saltar a ese momento.';
+  $('#stats').hidden=false; $('#specBox').hidden=false; $('#fileActions').hidden=false;
+  decide();
+});
+// stage 2 (cheap): the decider, re-run on every parameter change
+function decide(){
+  if(!fileData) return;
+  const dc=new DET.HushDecider(fileData.frameRate, params);
+  dc.command({type:'enable',on:true});
+  dc.command({type:'cal-start',maxSec:1e9,needSec:1e9});
+  const N=fileData.P.length;
+  frames={ n:N, t:new Float32Array(N), p:new Float32Array(N), sp:new Uint8Array(N), ho:new Uint8Array(N),
+           snr:new Float32Array(N), dep:new Float32Array(N), rat:new Float32Array(N), b:BAND_NAME.map(()=>new Float32Array(N)) };
+  let on=0, ev=0, prev=false, bsum=0, bmax=0;
+  for(let i=0;i<N;i++){
+    dc.frame(fileData.P[i]); const s=dc.snapshot();
+    frames.t[i]=s.t; frames.p[i]=s.p; frames.sp[i]=s.speech?1:0; frames.ho[i]=s.hold?1:0;
+    frames.snr[i]=s.snr; frames.dep[i]=s.depth; frames.rat[i]=s.ratio;
+    let mb=0; for(let g=0;g<5;g++){ frames.b[g][i]=s.boost[g]; if(s.boost[g]>mb) mb=s.boost[g]; }
+    if(s.speech){ on++; if(!prev) ev++; } prev=s.speech; bsum+=mb; if(mb>bmax) bmax=mb;
+  }
+  $('#stDur').textContent=fmtT(fileData.dur);
+  $('#stVoice').textContent=Math.round(on/N*100)+' %';
+  $('#stEvents').textContent=ev;
+  $('#stBoost').textContent=(bsum/N).toFixed(1)+' dB ('+bmax.toFixed(1)+')';
+  const rel=dc.spectrum(dc.cal.acc), A=dc.cal.acc, sec=A.n*dc.dt;
+  const box=$('#spec'); box.innerHTML='';
+  if(rel){
+    rel.forEach((v,g)=>{ const h=Math.max(2,(v+15)/30*100);
+      box.insertAdjacentHTML('beforeend',`<div><span>${v<=-14.9?'—':(v>0?'+':'')+v.toFixed(1)}</span><span class="bar"><i style="height:${h}%;background:${BCOL[g]}"></i></span><span>${BAND_NAME[g].replace(' Hz','').replace(' kHz','k')}</span></div>`); });
+    $('#specNote').textContent='Basado en '+sec.toFixed(1)+' s de voz reconocida. «—» = banda sin voz (el escudo bajaría ahí).';
+  } else $('#specNote').textContent='No hubo suficiente voz reconocida para estimar el espectro (se necesita al menos 1 s).';
+  draw();
+}
+function fmtT(s){ s=Math.max(0,s); const m=Math.floor(s/60), x=Math.floor(s%60); return m+':'+String(x).padStart(2,'0'); }
+$('#csvBtn').addEventListener('click',()=>{
+  if(!frames) return;
+  const rows=['tiempo_s,prob_voz,voz,sostiene,nivel_sobre_fondo_db,profundidad,razon_2_8hz,refuerzo_250,refuerzo_500,refuerzo_1k,refuerzo_2k,refuerzo_4k'];
+  const step=Math.max(1,Math.round(fileData.frameRate/10));
+  for(let i=0;i<frames.n;i+=step) rows.push([frames.t[i].toFixed(2),frames.p[i].toFixed(3),frames.sp[i],frames.ho[i],frames.snr[i].toFixed(2),
+    frames.dep[i].toFixed(3),frames.rat[i].toFixed(3),...frames.b.map(b=>b[i].toFixed(2))].join(','));
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([rows.join('\n')],{type:'text/csv'}));
+  a.download=(fileData.name.replace(/\.[^.]+$/,'')||'grabacion')+'_detector.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+});
+
+/* ---------- live microphone ---------- */
+const live={ ctx:null, stream:null, node:null, buf:[], max:0 };
+async function startLive(){
+  if(!DET){ toast('Primero hay que cargar el detector'); return; }
+  if(!(window.isSecureContext && navigator.mediaDevices)){ $('#liveNote').textContent='El micrófono necesita abrir esta página desde https://.'; return; }
+  try{
+    live.ctx=new (window.AudioContext||window.webkitAudioContext)();
+    await live.ctx.resume();
+    const url=URL.createObjectURL(new Blob([SRC],{type:'application/javascript'}));
+    await live.ctx.audioWorklet.addModule(url); URL.revokeObjectURL(url);
+    live.stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false,channelCount:1}});
+  }catch(err){ $('#liveNote').textContent='No se pudo abrir el micrófono: '+((err&&err.message)||err); stopLive(); return; }
+  const src=live.ctx.createMediaStreamSource(live.stream);
+  live.node=new AudioWorkletNode(live.ctx,'hush-detector',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1],
+    channelCount:1,channelCountMode:'explicit',processorOptions:{params,debug:true}});
+  const sink=live.ctx.createGain(); sink.gain.value=0;
+  src.connect(live.node); live.node.connect(sink); sink.connect(live.ctx.destination);
+  live.node.port.postMessage({type:'enable',on:true});
+  live.buf=[]; live.max=0;
+  live.node.port.onmessage=e=>{
+    const r=e.data; if(!r.frames) return;
+    for(const f of r.frames) live.buf.push(f);
+    const keep=30*94; if(live.buf.length>keep) live.buf.splice(0,live.buf.length-keep);
+    $('#liveNote').textContent = r.speech ? 'voz detectada' : r.hold ? 'sostiene (pausa entre frases)' : 'sin voz';
+  };
+  $('#liveBtn').textContent='DETENER';
+}
+function stopLive(){
+  if(live.stream) live.stream.getTracks().forEach(t=>t.stop());
+  if(live.ctx) live.ctx.close().catch(()=>{});
+  live.ctx=null; live.stream=null; live.node=null;
+  $('#liveBtn').textContent='EMPEZAR A ESCUCHAR';
+}
+$('#liveBtn').addEventListener('click',()=>{ live.node ? stopLive() : startLive(); });
+
+/* ---------- plot ---------- */
+const cv=$('#plot'), g2=cv.getContext('2d');
+let W=0,H=0;
+function size(){ const r=cv.getBoundingClientRect(), d=Math.min(2,devicePixelRatio||1); cv.width=r.width*d; cv.height=r.height*d; W=r.width; H=r.height; g2.setTransform(d,0,0,d,0,0); }
+addEventListener('resize',()=>{ size(); draw(); }); size();
+function series(){
+  if(mode==='file' && frames) return { n:frames.n, T:i=>frames.t[i], P:i=>frames.p[i], SP:i=>frames.sp[i], HO:i=>frames.ho[i],
+    B:(g,i)=>frames.b[g][i], SNR:i=>frames.snr[i], DEP:i=>frames.dep[i], RAT:i=>frames.rat[i], t0:0, t1:fileData.dur };
+  if(mode==='live' && live.buf.length){ const b=live.buf, tEnd=b[b.length-1].t;
+    return { n:b.length, T:i=>b[i].t, P:i=>b[i].p, SP:i=>b[i].speech?1:0, HO:i=>b[i].hold?1:0, B:(g,i)=>b[i].boost[g],
+      SNR:i=>b[i].snr, DEP:i=>b[i].depth, RAT:i=>b[i].ratio, t0:Math.max(0,tEnd-30), t1:Math.max(30,tEnd) }; }
+  return null;
+}
+function draw(){
+  g2.clearRect(0,0,W,H);
+  const L=62, R=10, lanes=[[8,.26],[.30,.50],[.54,.76],[.80,.96]].map(([a,b],k)=>k===0?[8,H*.26]:[H*a,H*b]);
+  const lane=(k,v,lo,hi)=>{ const [a,b]=lanes[k]; return b-(Math.max(lo,Math.min(hi,v))-lo)/(hi-lo)*(b-a); };
+  g2.font='9px '+getComputedStyle(document.body).getPropertyValue('--mono');
+  const names=['voz','refuerzo','modulación','sobre fondo'];
+  lanes.forEach(([a,b],k)=>{ g2.fillStyle='rgba(243,228,213,.035)'; g2.fillRect(L,a,W-L-R,b-a); g2.fillStyle='#6f5b4e'; g2.fillText(names[k],4,a+10); });
+  const S=series();
+  if(!S){ g2.fillStyle='#a88e7c'; g2.fillText(mode==='file'?'Elige una grabación para ver las señales':'Toca «Empezar a escuchar»',L+10,H/2); return; }
+  const X=t=>L+(t-S.t0)/(S.t1-S.t0)*(W-L-R);
+  const stride=Math.max(1,Math.floor(S.n/(W*1.5)));
+  const line=(fy,color,lw)=>{ g2.beginPath(); let first=true; for(let i=0;i<S.n;i+=stride){ const x=X(S.T(i)); if(x<L) continue; const y=fy(i); first?g2.moveTo(x,y):g2.lineTo(x,y); first=false; } g2.strokeStyle=color; g2.lineWidth=lw; g2.stroke(); };
+  const thr=(k,v,lo,hi)=>{ const y=lane(k,v,lo,hi); g2.setLineDash([4,5]); g2.beginPath(); g2.moveTo(L,y); g2.lineTo(W-R,y); g2.strokeStyle='rgba(243,228,213,.45)'; g2.lineWidth=1; g2.stroke(); g2.setLineDash([]); };
+  // lane 0: voice state strip + probability
+  const [a0,b0]=lanes[0];
+  for(let i=0;i<S.n;i+=stride){ const x=X(S.T(i)); if(x<L) continue; const w=Math.max(1,X(S.T(Math.min(S.n-1,i+stride)))-x);
+    if(S.SP(i)){ g2.fillStyle='rgba(229,151,127,.28)'; g2.fillRect(x,a0,w,b0-a0); }
+    else if(S.HO(i)){ g2.fillStyle='rgba(229,151,127,.12)'; g2.fillRect(x,a0,w,b0-a0); } }
+  line(i=>lane(0,S.P(i),0,1),'#e5977f',1.6); thr(0,.55,0,1);
+  // lane 1: boosts
+  for(let g=0;g<5;g++) line(i=>lane(1,S.B(g,i),0,6),BCOL[g],1.3);
+  // lane 2: modulation ratio (0..1) and depth (0..1.5)
+  line(i=>lane(2,S.DEP(i)/1.5,0,1),'#d29a5e',1); line(i=>lane(2,S.RAT(i),0,1),'#9fd3c7',1.5);
+  if(params){ thr(2,params.ratioMin,0,1); }
+  // lane 3: level above floor
+  line(i=>lane(3,S.SNR(i),-2,20),'#c9b8f0',1.3); if(params) thr(3,params.snrMin,-2,20);
+  // time axis
+  g2.fillStyle='#6f5b4e'; const span=S.t1-S.t0, tick=span>240?60:span>90?20:span>30?10:5;
+  for(let t=Math.ceil(S.t0/tick)*tick;t<=S.t1;t+=tick){ const x=X(t); g2.fillRect(x,H-14,1,4); g2.fillText(fmtT(t),x+3,H-3); }
+  // playback cursor
+  if(mode==='file' && !player.hidden){ const x=X(player.currentTime); g2.fillStyle='#f3e7da'; g2.fillRect(x,0,1.5,H-16); }
+}
+cv.addEventListener('click',e=>{
+  if(mode!=='file' || !fileData) return;
+  const r=cv.getBoundingClientRect(), L=62, R=10, t=(e.clientX-r.left-L)/(r.width-L-R)*fileData.dur;
+  player.currentTime=Math.max(0,Math.min(fileData.dur,t)); draw();
+});
+(function loop(){ if((mode==='live' && live.node) || (mode==='file' && !player.paused)) draw(); requestAnimationFrame(loop); })();
+draw();
+})();
+</script>
+</body>
+</html>

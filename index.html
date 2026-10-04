@@ -1,7 +1,7 @@
 <!DOCTYPE html>
-<!-- HUSH ARCHIVE 2.0: un solo archivo. Todo el sonido se sintetiza en vivo con Web Audio (sin muestras).
-     Novedades v2.0: ruido con forma de voz (LTASS), escudo de 5 bandas con presets, calibración por micrófono,
-     enmascaramiento adaptativo, textura viva, controles de pantalla de bloqueo (Media Session) y pantalla encendida (Wake Lock). -->
+<!-- HUSH ARCHIVE 2.1: un solo archivo. Todo el sonido se sintetiza en vivo con Web Audio (sin muestras).
+     v2.1: detector de voz en AudioWorklet (espectro de modulación 2–8 Hz por bandas de tercio de octava), calibración filtrada
+     por voz, aprendizaje pasivo, sostenido entre frases. El detector vive en el bloque #hush-detector-src y pruebas.html lo reutiliza. -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1a1109">
 <meta name="color-scheme" content="dark">
 <meta name="description" content="Máquina de ruido para concentrarse en la oficina: enmascara las conversaciones de otras oficinas. Todo se genera en el dispositivo.">
-<title>HUSH ARCHIVE 2.0 — modo oficina</title>
+<title>HUSH ARCHIVE 2.1 — modo oficina</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=IBM+Plex+Mono:wght@400;500&family=Schibsted+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
@@ -529,6 +529,9 @@ footer{padding-bottom:max(26px,env(safe-area-inset-bottom))}
 .led-wrap{white-space:nowrap}
 @media (max-width:760px){ .brand-sub{display:none} }
 @media (min-width:1021px){ .stage-grid{align-items:start} .stage-grid>div:first-child{padding-top:24px} }
+.learn{margin-top:10px;padding:12px 14px;border:1px dashed rgba(var(--glow),.45);border-radius:12px;background:rgba(var(--glow),.05)}
+.learn .note{margin-top:0;margin-bottom:10px}
+.lab-link{color:var(--acc2);text-underline-offset:3px}
 </style>
 </head>
 <body data-mode="office">
@@ -542,7 +545,7 @@ footer{padding-bottom:max(26px,env(safe-area-inset-bottom))}
 <header class="top">
   <div class="brand">
     <svg viewBox="0 0 24 24"><circle cx="9" cy="12" r="6.5"/><circle cx="15" cy="12" r="6.5"/></svg>
-    <span>HUSH·ARCHIVE</span><span class="brand-sub">v2.0 · mantas de sonido para audífonos</span>
+    <span>HUSH·ARCHIVE</span><span class="brand-sub">v2.1 · mantas de sonido para audífonos</span>
   </div>
   <div class="top-right">
     <span class="badge">TODO LOCAL · SIN MUESTRAS</span>
@@ -624,11 +627,15 @@ footer{padding-bottom:max(26px,env(safe-area-inset-bottom))}
         <div class="slider-meta"><span>voces graves</span><span id="presetName">a través de muro</span><span>consonantes</span></div>
 
         <div class="shield-row">
-          <button class="act-btn" id="calBtn">CALIBRAR · 15 S</button>
-          <span class="hint mono">hazlo mientras hablan al lado</span>
+          <button class="act-btn" id="calBtn">CALIBRAR</button>
+          <span class="hint mono">hasta 30 s · termina antes si oye suficiente voz</span>
         </div>
         <div class="cal-bar"><i id="calBar"></i></div>
         <p class="note" id="calNote"></p>
+        <div class="learn" id="learnRow" hidden>
+          <p class="note" id="learnTxt"></p>
+          <button class="act-btn" id="learnBtn">APLICAR LO APRENDIDO</button>
+        </div>
 
         <div class="shield-row">
           <button class="switch" id="adaptSw" role="switch" aria-checked="false">
@@ -638,13 +645,15 @@ footer{padding-bottom:max(26px,env(safe-area-inset-bottom))}
             <button class="chip" data-s="low">BAJA</button>
             <button class="chip" data-s="mid">MEDIA</button>
             <button class="chip" data-s="high">ALTA</button>
+            <button class="chip" data-s="custom" id="customChip" hidden>PROPIA</button>
           </div>
         </div>
         <div class="intrusion">
-          <div class="row-between"><span class="hint mono">voces detectadas</span><span class="readout mono" id="intrOut">apagado</span></div>
+          <div class="row-between"><span class="hint mono">probabilidad de voz</span><span class="readout mono" id="intrOut">apagado</span></div>
           <div class="intr-bar"><i id="intrBar"></i></div>
         </div>
         <p class="note" id="micNote"></p>
+        <p class="note"><a class="lab-link" href="pruebas.html">Abrir el laboratorio del detector</a> para probarlo con tus propias grabaciones.</p>
       </section>
 
       <section class="ctl">
@@ -700,7 +709,7 @@ footer{padding-bottom:max(26px,env(safe-area-inset-bottom))}
     </aside>
   </div>
   <div class="stage-foot">
-    <span>IZQ / DER INDEPENDIENTES · LIMITADOR · TOPE DIGITAL · v2.0</span>
+    <span>IZQ / DER INDEPENDIENTES · LIMITADOR · TOPE DIGITAL · v2.1</span>
     <span>ESPACIO reproducir · 1 rosa · 2 marrón · 3 oficina</span>
   </div>
 </section>
@@ -713,8 +722,8 @@ footer{padding-bottom:max(26px,env(safe-area-inset-bottom))}
     <ol class="steps">
       <li class="reveal"><div><h4>Ponte audífonos</h4><p>Con audífonos el micrófono no se escucha a sí mismo y el escudo trabaja a menor volumen. Si tienen cancelación de ruido, actívala: ella quita el rumor grave y esta app tapa las voces que quedan.</p></div></li>
       <li class="reveal"><div><h4>Elige oficina 2.0 y un preset</h4><p>«A través de muro» si las voces llegan apagadas desde otra sala; «Oficina abierta» si las escuchas nítidas, con consonantes; «Pasillo» para un punto intermedio.</p></div></li>
-      <li class="reveal"><div><h4>Calibra mientras conversan</h4><p>Toca «Calibrar» cuando la conversación molesta esté ocurriendo. En 15 segundos la app mide qué bandas ocupan esas voces y ajusta el escudo.</p></div></li>
-      <li class="reveal"><div><h4>Activa el modo adaptativo</h4><p>El escudo se queda bajo cuando hay calma y sube hasta 6 dB en las bandas de voz cuando alguien habla, con subidas de unos 3 s y bajadas de unos 15 s para que no notes el cambio.</p></div></li>
+      <li class="reveal"><div><h4>Calibra mientras conversan</h4><p>Toca «Calibrar» cuando la conversación molesta esté ocurriendo. La app escucha hasta 30 segundos, usa solo los momentos en que reconoce voz (no el teclado ni el aire acondicionado) y ajusta el escudo a las bandas donde llegan esas voces. Te dice cuántos segundos de voz usó y qué tan confiable es el resultado.</p></div></li>
+      <li class="reveal"><div><h4>Activa el modo adaptativo</h4><p>Reconoce la voz por su ritmo de sílabas, de 2 a 8 por segundo, que un teclado o una puerta no tienen. Cuando alguien habla sube el escudo hasta 6 dB en las bandas de esa voz; entre frases lo sostiene 4 segundos y después baja lento. Mientras suena, también aprende el espectro de las voces de tu oficina y te ofrece aplicarlo, sin que tengas que calibrar en el momento justo.</p></div></li>
       <li class="reveal"><div><h4>Baja el nivel hasta el mínimo que funcione</h4><p>La meta es que las palabras dejen de entenderse, no que desaparezcan. Ese punto suele estar bastante más abajo de lo que uno espera.</p></div></li>
     </ol>
   </div>
@@ -871,6 +880,225 @@ footer{padding-bottom:max(26px,env(safe-area-inset-bottom))}
   <div class="foot-base">HUSH ARCHIVE 2.0 · SINTETIZADO, NUNCA GRABADO</div>
 </footer>
 <div class="toast" id="toast" role="status"></div>
+<script type="text/plain" id="hush-detector-src">
+/* HUSH detector v2.1 — runs inside an AudioWorklet (audio thread) in the app, and as plain JS in pruebas.html.
+   Stage 1 (HushFeatures): 15 third-octave band-pass filters (200 Hz – 5 kHz), power per ~10 ms frame.
+   Stage 2 (HushDecider): per frame — envelope modulation spectrum (2–8 Hz syllabic band vs 2–40 Hz),
+   noise floor, speech probability with hysteresis + hold, per-band adaptive boost, calibration accumulators. */
+'use strict';
+const HUSH_CENTERS = [200,250,315,400,500,630,800,1000,1250,1600,2000,2500,3150,4000,5000];
+const HUSH_GROUPS  = [[0,1,2],[3,4,5],[6,7,8],[9,10,11],[12,13,14]];      // → EQ bands 250, 500, 1k, 2k, 4k
+// snrMin: dB above the band's noise floor · modMin: syllabic modulation depth · ratioMin: share of the
+// envelope's fluctuation that falls in 2–8 Hz (speech ≈ .6–.9; ventilation, keyboards, knocks ≈ .2–.35)
+const HUSH_SENS = {
+  low : { snrMin:4,   modMin:.28, ratioMin:.55, hold:4 },
+  mid : { snrMin:2.5, modMin:.20, ratioMin:.47, hold:4 },
+  high: { snrMin:1,   modMin:.15, ratioMin:.40, hold:4 }
+};
+function hushBandpass(fc,Q,sr){                 // RBJ band-pass, 0 dB peak; returns normalised coefficients
+  const w=2*Math.PI*fc/sr, al=Math.sin(w)/(2*Q), a0=1+al;
+  return [al/a0, 0, -al/a0, -2*Math.cos(w)/a0, (1-al)/a0];
+}
+
+class HushFeatures {
+  constructor(sr){
+    this.sr=sr;
+    this.F = 128*Math.max(1,Math.round(sr/100/128));   // frame length (multiple of the 128-sample render quantum)
+    this.frameRate = sr/this.F;
+    const Q=4.32;                                         // 1/3-octave bandwidth
+    this.co = HUSH_CENTERS.map(fc=>hushBandpass(fc,Q,sr));
+    this.st = new Float64Array(HUSH_CENTERS.length*8);    // two cascaded biquads per band: x1,x2,y1,y2 ×2
+    this.acc = new Float64Array(HUSH_CENTERS.length);
+    this.n=0; this.onFrame=null;
+  }
+  process(x){                                            // any block length
+    let off=0;
+    while(off<x.length){
+      const take=Math.min(x.length-off, this.F-this.n);
+      for(let b=0;b<this.co.length;b++){
+        const c=this.co[b], s=this.st, k=b*8, b0=c[0], b2=c[2], a1=c[3], a2=c[4];
+        let x1=s[k],x2=s[k+1],y1=s[k+2],y2=s[k+3], u1=s[k+4],u2=s[k+5],v1=s[k+6],v2=s[k+7], e=0;
+        for(let i=off;i<off+take;i++){
+          const xi=x[i];
+          const y=b0*xi+b2*x2-a1*y1-a2*y2;  x2=x1; x1=xi; y2=y1; y1=y;
+          const v=b0*y +b2*u2-a1*v1-a2*v2;  u2=u1; u1=y;  v2=v1; v1=v;
+          e+=v*v;
+        }
+        s[k]=x1;s[k+1]=x2;s[k+2]=y1;s[k+3]=y2;s[k+4]=u1;s[k+5]=u2;s[k+6]=v1;s[k+7]=v2;
+        this.acc[b]+=e;
+      }
+      this.n+=take; off+=take;
+      if(this.n>=this.F){
+        const P=new Float64Array(this.acc.length);
+        for(let b=0;b<P.length;b++){ P[b]=this.acc[b]/this.F; this.acc[b]=0; }
+        this.n=0;
+        if(this.onFrame) this.onFrame(P);
+      }
+    }
+  }
+}
+
+class HushDecider {
+  constructor(frameRate, params){
+    this.er=frameRate; this.dt=1/frameRate;
+    this.p = Object.assign({}, HUSH_SENS.mid, params||{});
+    this.maxBoost=6; this.up=3; this.down=15;
+    const ex=t=>1-Math.exp(-this.dt/t);
+    this.k={ lvl:ex(.15), avg:ex(.6), mod:ex(1.2), lp:ex(1/(2*Math.PI*1.5)), floorDn:ex(.4), floorUp:ex(25), floorFast:ex(3), floorWarm:ex(.5),
+             pS:ex(.25), up:ex(this.up), down:ex(this.down), tgt:ex(2), forget:ex(600) };
+    // 4 Hz band-pass on the envelope (Q .67 ≈ 2–8 Hz)
+    this.bp = hushBandpass(4,.67,frameRate);
+    const C=6;                                         // 5 groups + overall
+    this.ch = Array.from({length:C},()=>({ lvlS:null, pAvg:0, floor:null, x1:0,x2:0,y1:0,y2:0, lp:null, v4:0, vh:0, mu:0,
+                                           snr:0, depth:0, ratio:0, score:0 }));
+    this.t=0; this.pS=0; this.speech=false; this.holdUntil=-1; this.enabled=false;
+    this.boost=new Float64Array(5); this.lastT=new Float64Array(5); this.target=new Float64Array(5);
+    this.cal=null;                                    // explicit calibration
+    this.pas=this.newAcc();                           // passive learning (exponential forgetting)
+  }
+  newAcc(){ return { n:0, sp:new Float64Array(15), vote:new Float64Array(5), no:new Float64Array(15), noN:0 }; }
+  setParams(pr){ Object.assign(this.p, pr||{}); }
+  command(m){
+    if(!m) return;
+    if(m.type==='params') this.setParams(m.params);
+    else if(m.type==='enable') this.enabled=!!m.on;
+    else if(m.type==='cal-start') this.cal={ acc:this.newAcc(), t:0, max:m.maxSec||30, need:m.needSec||8, done:false };
+    else if(m.type==='cal-cancel') this.cal=null;
+    else if(m.type==='passive-reset') this.pas=this.newAcc();
+  }
+  frame(P){
+    const k=this.k, dt=this.dt, ramp=(x,a,b)=>Math.min(1,Math.max(0,(x-a)/(b-a)));
+    // Digital silence (mic still starting, muted input): ignore, or the noise floor would sink to −200 dB
+    let tot=0; for(let i=0;i<P.length;i++) tot+=P[i];
+    if(!(tot>1e-13)) return this.speech || this.t<this.holdUntil;
+    this.t+=dt;
+    const warm=this.t>1.5;
+    let pBest=0, overall=0;
+    for(let c=0;c<6;c++){
+      let pw=0;
+      if(c<5){ const g=HUSH_GROUPS[c]; pw=P[g[0]]+P[g[1]]+P[g[2]]; } else { for(let b=0;b<15;b++) pw+=P[b]; }
+      const s=this.ch[c], lvl=10*Math.log10(pw+1e-20), a=Math.sqrt(pw);
+      s.lvlS = s.lvlS===null ? lvl : s.lvlS+(lvl-s.lvlS)*k.lvl;
+      s.pAvg += (pw-s.pAvg)*k.avg;
+      // noise floor: drops fast to quiet moments, climbs slowly (~25 s); if it sits >15 dB under the
+      // current level (a long quiet gap, a move to a louder room) it catches up in a few seconds; during the
+      // first 3 s of signal it settles quickly (the mic's start-up ramp would otherwise pin it too low)
+      s.floor = s.floor===null ? s.lvlS : s.floor+(s.lvlS-s.floor)*(s.lvlS<s.floor?k.floorDn:(this.t<3?k.floorWarm:s.lvlS-s.floor>15?k.floorFast:k.floorUp));
+      // envelope modulation: syllabic band (2–8 Hz) vs everything above ~1.5 Hz
+      const b=this.bp, y=b[0]*a+b[2]*s.x2-b[3]*s.y1-b[4]*s.y2; s.x2=s.x1; s.x1=a; s.y2=s.y1; s.y1=y;
+      s.lp = s.lp===null ? a : s.lp+(a-s.lp)*k.lp;
+      const h=a-s.lp;
+      s.v4+=(y*y-s.v4)*k.mod; s.vh+=(h*h-s.vh)*k.mod; s.mu+=(a-s.mu)*k.mod;
+      s.depth = s.mu>0 ? Math.sqrt(2*s.v4)/s.mu : 0;
+      s.ratio = s.vh>0 ? s.v4/s.vh : 0;
+      s.snr = 10*Math.log10(s.pAvg+1e-20)-s.floor;
+      const p=this.p;
+      s.score = warm ? ramp(s.ratio,p.ratioMin,p.ratioMin+.2)*ramp(s.depth,p.modMin,p.modMin*2)*ramp(s.snr,p.snrMin,p.snrMin+3.5) : 0;
+      // decision uses 400 Hz–2.5 kHz groups + broadband; the 250 Hz group is left out (ventilation/traffic sway there)
+      if(c>=1 && c!==4 && s.score>pBest) pBest=s.score;
+    }
+    const pr=pBest;
+    this.pS+=(pr-this.pS)*k.pS;
+    if(!this.speech && this.pS>.55) this.speech=true;
+    else if(this.speech && this.pS<.3){ this.speech=false; this.holdUntil=this.t+this.p.hold; }
+    const active=this.speech || this.t<this.holdUntil;
+    // per-band targets: how far each band's intrusion sits above its floor (and how speech-like it is)
+    for(let g=0;g<5;g++){
+      const s=this.ch[g];
+      if(this.speech){
+        const tg=this.maxBoost*ramp(s.snr,1.5,9)*(.5+.5*ramp(s.depth,this.p.modMin*.7,this.p.modMin*1.8));
+        this.lastT[g] = Math.max(tg, this.lastT[g]+(tg-this.lastT[g])*k.tgt);
+      } else if(!active) this.lastT[g]+=(0-this.lastT[g])*k.tgt;
+      this.target[g] = (this.enabled && active) ? this.lastT[g] : 0;
+      const d=this.target[g]-this.boost[g];
+      this.boost[g]+=d*(d>0?k.up:k.down);
+    }
+    // calibration accumulators: speech frames vs clearly quiet frames (spectral subtraction later)
+    const o=this.ch[5];
+    const isSp=this.speech && this.pS>.6, isNo=!active && this.pS<.12 && warm && o.lvlS-o.floor<2;   // quiet = at the floor (excludes speech onsets)
+    // Same frames for every band (no selection bias). Each band also gets a vote: did it carry the syllabic
+    // rhythm itself? Bands that rarely do (keyboard clicks at 2–4 kHz behind muffled voices) are treated as
+    // voice-free when the spectrum is read. Background comes only from clearly quiet frames.
+    const add=(A,w)=>{
+      if(isSp){
+        A.n+=w;
+        for(let g=0;g<5;g++){
+          const ch=this.ch[g];
+          for(const b of HUSH_GROUPS[g]) A.sp[b]+=P[b]*w;
+          if(ch.ratio>=this.p.ratioMin*.9 && ch.snr>1) A.vote[g]+=w;
+        }
+      } else if(isNo){ for(let b=0;b<15;b++) A.no[b]+=P[b]*w; A.noN+=w; }
+    };
+    if(this.cal && !this.cal.done){
+      add(this.cal.acc,1); this.cal.t+=dt;
+      if(this.cal.acc.n*dt>=this.cal.need || this.cal.t>=this.cal.max) this.cal.done=true;
+    }
+    if(this.enabled){
+      const f=1-k.forget, A=this.pas;
+      for(let b=0;b<15;b++){ A.sp[b]*=f; A.no[b]*=f; } for(let g=0;g<5;g++) A.vote[g]*=f; A.n*=f; A.noN*=f;
+      add(A,1);
+    }
+    return active;
+  }
+  // Intrusion spectrum per EQ band, relative to the mean of the bands that carried voice (dB).
+  // Bands with no voice get −15 dB (nothing to mask there). null if under 1 s of speech.
+  spectrum(A){
+    if(!A || A.n*this.dt<1) return null;
+    const v=[];
+    for(let g=0;g<5;g++){
+      if(A.vote[g]<.4*A.n){ v.push(null); continue; }
+      let sp=0,no=0; for(const b of HUSH_GROUPS[g]){ sp+=A.sp[b]; no+=A.no[b]; }
+      sp/=A.n; no = A.noN>0 ? no/A.noN : 0;
+      v.push(10*Math.log10(Math.max(sp-no, sp*.05)+1e-20));
+    }
+    const ok=v.filter(x=>x!==null); if(!ok.length) return null;
+    const m=ok.reduce((x,y)=>x+y,0)/ok.length;
+    return v.map(x=>x===null?-15:Math.max(-15,x-m));
+  }
+  report(){
+    const o=this.ch[5], cal=this.cal;
+    const r={ t:this.t, p:this.pS, speech:this.speech, hold:!this.speech && this.t<this.holdUntil,
+      boost:Array.from(this.boost), snr:this.ch.slice(0,5).map(c=>c.snr), snrAll:o.snr, depth:o.depth, ratio:o.ratio,
+      passive:{ speechSec:this.pas.n*this.dt, rel:this.spectrum(this.pas) } };
+    if(cal){
+      r.cal={ t:cal.t, max:cal.max, need:cal.need, speechSec:cal.acc.n*this.dt, done:cal.done,
+              rel:cal.done?this.spectrum(cal.acc):null };
+      if(cal.done) this.cal=null;
+    }
+    return r;
+  }
+  snapshot(){ const o=this.ch[5]; return { t:this.t, p:this.pS, speech:this.speech, hold:!this.speech && this.t<this.holdUntil,
+    boost:Array.from(this.boost), snr:o.snr, depth:o.depth, ratio:o.ratio }; }
+}
+
+if(typeof registerProcessor==='function'){
+  class HushDetectorProcessor extends AudioWorkletProcessor{
+    constructor(o){
+      super();
+      const opt=(o&&o.processorOptions)||{};
+      this.fx=new HushFeatures(sampleRate);
+      this.dc=new HushDecider(this.fx.frameRate, opt.params);
+      this.debug=!!opt.debug; this.batch=[]; this.n=0;
+      this.port.onmessage=e=>this.dc.command(e.data);
+      this.fx.onFrame=P=>{
+        this.dc.frame(P);
+        if(this.debug) this.batch.push(this.dc.snapshot());
+        if(++this.n%5===0){
+          const r=this.dc.report();
+          if(this.debug){ r.frames=this.batch; this.batch=[]; }
+          this.port.postMessage(r);
+        }
+      };
+    }
+    process(inputs){
+      const ch=inputs[0] && inputs[0][0];
+      if(ch) this.fx.process(ch);
+      return true;
+    }
+  }
+  registerProcessor('hush-detector', HushDetectorProcessor);
+}
+</script>
 <script>
 // HUSH ARCHIVE 2.0 — app logic.
 // Sections: helpers/state · spectra maths · noise generation · audio graph · shield (EQ) · microphone,
@@ -898,14 +1126,17 @@ const BASE_TITLE = document.title;
 const BANDS = [250, 500, 1000, 2000, 4000];   // shield band centres (Hz), one octave apart
 const EQ_Q = 1.41;                             // ≈ one-octave bandwidth
 const EQ_LIM = 9;                              // user range ±9 dB
-const ADAPT_MAX = 6;                           // adaptive boost ceiling per band (dB)
-const ADAPT_UP = 3, ADAPT_DOWN = 15;           // time constants (s): rise fast-ish, fall slowly
-const CAL_MS = 15000;
+const CAL_MAX_S = 30, CAL_NEED_S = 8;          // calibration: listen up to 30 s, stop early after 8 s of voice
 const PRESETS = { wall:[4,4,2,-2,-4], open:[-2,1,3,4,2], hall:[1,2,2,1,0], flat:[0,0,0,0,0] };
 const PRESET_NAME = { wall:'a través de muro', open:'oficina abierta', hall:'pasillo', flat:'plano', cal:'calibrado', custom:'personalizado' };
 const BAND_NAME = ['250 Hz','500 Hz','1 kHz','2 kHz','4 kHz'];
-// Detection thresholds: ex = dB above the noise floor, fl = dB of short-term fluctuation (speech is bumpy)
-const SENS = { low:{ex:5, fl:2.6}, mid:{ex:3.5, fl:2}, high:{ex:2.5, fl:1.5} };
+// Voice detector: one source (in the <script type="text/plain"> above) runs on the audio thread as an
+// AudioWorklet, and is also evaluated here to read its presets. pruebas.html reuses the same source.
+const DET_SRC = document.getElementById('hush-detector-src').textContent;
+const DET = new Function(DET_SRC+'\nreturn { HUSH_SENS };')();
+const customParams = () => { const c=store.get('detParams',null); return (c && typeof c==='object') ? c : null; };
+const sensOk = k => (k==='custom' ? !!customParams() : !!DET.HUSH_SENS[k]);
+const paramsFor = k => (k==='custom' && customParams()) ? customParams() : DET.HUSH_SENS[k] || DET.HUSH_SENS.mid;
 
 const numArr = (v,n) => (Array.isArray(v) && v.length===n && v.every(x=>typeof x==='number' && isFinite(x))) ? v : null;
 const savedMode = store.get('mode','office');
@@ -921,7 +1152,7 @@ const state = {
   calEq:  numArr(store.get('calEq',null),5),
   adaptPref: !!store.get('adapt',false),   // user wants adaptive (mic opens only while playing)
   adaptOn: false,                          // adaptive actually running
-  sens:   SENS[store.get('sens','mid')] ? store.get('sens','mid') : 'mid',
+  sens:   sensOk(store.get('sens','mid')) ? store.get('sens','mid') : 'mid',
   texture: store.get('texture',true) !== false,
   wake:   !!store.get('wake',false),
   playing:false, elapsed:0, total:0, remaining:null, run:0, nextBreak:BREAK_SECONDS
@@ -941,7 +1172,8 @@ const bigWord=$('#bigWord'), modeLine=$('#modeLine'), playBtn=$('#playBtn'),
       bandEls=$$('.band'), presetNameEl=$('#presetName'), calChip=$('#calChip'),
       calBtn=$('#calBtn'), calBar=$('#calBar'), calNote=$('#calNote'),
       adaptSw=$('#adaptSw'), intrOut=$('#intrOut'), intrBar=$('#intrBar'), micNote=$('#micNote'),
-      texSw=$('#texSw'), wakeSw=$('#wakeSw'), devNote=$('#devNote');
+      texSw=$('#texSw'), wakeSw=$('#wakeSw'), devNote=$('#devNote'),
+      learnRow=$('#learnRow'), learnTxt=$('#learnTxt'), learnBtn=$('#learnBtn'), customChip=$('#customChip');
 
 const MODE_COPY = {
   pink  : { line:'lluvia constante, viento en un bosque: el siseo suave que cubre voces y teclados.',
@@ -1209,12 +1441,16 @@ $$('.chip[data-p]').forEach(c=>c.addEventListener('click',()=>{
   toast('Escudo: '+PRESET_NAME[p]);
 }));
 
-/* ---------------- microphone, calibration, adaptive ---------------- */
-const mic = { stream:null, srcN:null, an:null, sink:null, buf:null, bins:null, timer:null };
-const det = { floor:null, hist:BANDS.map(()=>[]), score:0, n:0 };
-const cal = { active:false, t0:0, samples:[] };
+/* ---------------- microphone, calibration, adaptive (AudioWorklet) ----------------
+   The detector runs on the audio thread and posts a report ~19 times per second:
+   speech probability, speech/hold state, per-band boost (already ramped: up ~3 s, down ~15 s, 4 s hold),
+   calibration progress/result and the spectrum learned passively while the shield plays. */
+const mic = { stream:null, srcN:null, node:null, sink:null, modCtx:null, last:null, n:0, lastMsg:0 };
+const cal = { active:false, guard:null };
+let learned = null;          // { rel:[5], sec } learned passively this session
 const micSupported = () => !!(window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 function micMsg(t,warn){ micNote.textContent=t; micNote.classList.toggle('warn',!!warn); }
+const detPost = m => { if(mic.node) mic.node.port.postMessage(m); };
 
 async function ensureAudio(){
   if(!started){
@@ -1234,6 +1470,13 @@ async function micOpen(){
     return false;
   }
   if(!(await ensureAudio())){ toast('El navegador pausó el audio: toca una vez más'); return false; }
+  if(!ctx.audioWorklet){ micMsg('Este navegador no soporta AudioWorklet: actualiza Chrome para usar el detector.',true); return false; }
+  try{
+    if(mic.modCtx!==ctx){
+      const url=URL.createObjectURL(new Blob([DET_SRC],{type:'application/javascript'}));
+      await ctx.audioWorklet.addModule(url); URL.revokeObjectURL(url); mic.modCtx=ctx;
+    }
+  }catch(e){ console.error(e); micMsg('No se pudo cargar el detector de voz: '+((e&&e.message)||e),true); return false; }
   try{
     mic.stream = await navigator.mediaDevices.getUserMedia({ audio:{
       echoCancellation:false, noiseSuppression:false, autoGainControl:false, channelCount:1 } });
@@ -1245,132 +1488,150 @@ async function micOpen(){
     micMsg(msg,true); return false;
   }
   mic.srcN=ctx.createMediaStreamSource(mic.stream);
-  mic.an=ctx.createAnalyser(); mic.an.fftSize=2048; mic.an.smoothingTimeConstant=0;
-  mic.sink=ctx.createGain(); mic.sink.gain.value=0;           // keeps the analyser pulled; outputs silence
-  mic.srcN.connect(mic.an); mic.an.connect(mic.sink); mic.sink.connect(ctx.destination);
-  mic.buf=new Float32Array(mic.an.frequencyBinCount);
-  const hz=ctx.sampleRate/mic.an.fftSize;
-  mic.bins=BANDS.map(f=>[Math.max(1,Math.floor(f/Math.SQRT2/hz)), Math.min(mic.buf.length-1,Math.ceil(f*Math.SQRT2/hz))]);
+  mic.node=new AudioWorkletNode(ctx,'hush-detector',{ numberOfInputs:1, numberOfOutputs:1, outputChannelCount:[1],
+    channelCount:1, channelCountMode:'explicit', processorOptions:{ params:paramsFor(state.sens) } });
+  mic.sink=ctx.createGain(); mic.sink.gain.value=0;            // keeps the worklet pulled; outputs silence
+  mic.srcN.connect(mic.node); mic.node.connect(mic.sink); mic.sink.connect(ctx.destination);
+  mic.node.port.onmessage=e=>onDetector(e.data);
+  mic.n=0; mic.last=null; mic.lastMsg=performance.now();
   mic.stream.getTracks().forEach(t=>t.addEventListener('ended',()=>{
-    micMsg('El sistema cerró el micrófono.',true); setAdaptive(false,true); micClose();
+    micMsg('El sistema cerró el micrófono.',true); if(cal.active) endCal(null); setAdaptive(false,true); micClose();
   }));
-  mic.timer=setInterval(micTick,50);
   micMsg('Micrófono activo · se analiza en tu teléfono, no se graba.');
   return true;
 }
 function micClose(){
   if(!mic.stream) return;
-  clearInterval(mic.timer); mic.timer=null;
-  try{ mic.srcN.disconnect(); mic.an.disconnect(); mic.sink.disconnect(); }catch(e){}
+  try{ mic.node.port.onmessage=null; mic.srcN.disconnect(); mic.node.disconnect(); mic.sink.disconnect(); }catch(e){}
   mic.stream.getTracks().forEach(t=>t.stop());
-  mic.stream=null; det.floor=null; det.hist=BANDS.map(()=>[]); det.score=0;
+  mic.stream=null; mic.node=null; mic.last=null;
   if(!micNote.classList.contains('warn')) micMsg('');
   maybeSuspend();
 }
 function maybeSuspend(){
   setTimeout(()=>{ if(ctx && !state.playing && !mic.stream && ctx.state==='running'){ selfSuspend=true; ctx.suspend(); } },1600);
 }
-function bandLevels(){
-  mic.an.getFloatFrequencyData(mic.buf);
-  return mic.bins.map(([a,b])=>{
-    let s=0; for(let i=a;i<=b;i++){ const v=mic.buf[i]; if(isFinite(v)) s+=Math.pow(10,v/10); }
-    return 10*Math.log10(s+1e-12);
-  });
-}
-function micTick(){
-  const L=bandLevels();
-  if(cal.active){ calStep(L); return; }
-  if(!state.adaptOn || !state.playing || ctx.state!=='running') return;
-  const s=SENS[state.sens], dt=.05;
-  if(!det.floor) det.floor=L.slice();
-  let maxScore=0;
-  for(let i=0;i<5;i++){
-    const h=det.hist[i]; h.push(L[i]); if(h.length>30) h.shift();          // last 1.5 s
-    // Noise floor: falls quickly to quiet moments, rises slowly (~30 s) to follow a changing room
-    det.floor[i] += (L[i]-det.floor[i]) * (L[i]<det.floor[i] ? .05 : .0015);
-    let mean=0; for(const v of h) mean+=v; mean/=h.length;
-    let sd=0;   for(const v of h) sd+=(v-mean)*(v-mean); sd=Math.sqrt(sd/h.length);
-    // Speech = louder than the floor AND bumpy (syllables); steady sounds, including our own masker, score ~0
-    const score = clamp((mean-det.floor[i]-s.ex)/6,0,1) * clamp((sd-s.fl)/2.5,0,1);
-    const target = score*ADAPT_MAX;
-    adapt[i] += (target-adapt[i]) * dt/(target>adapt[i] ? ADAPT_UP : ADAPT_DOWN);
-    if(score>maxScore) maxScore=score;
+function onDetector(r){
+  mic.last=r; mic.lastMsg=performance.now();
+  if(r.cal) calProgress(r.cal);
+  if(state.adaptOn && state.playing) adapt=r.boost.slice();
+  if(state.adaptOn && r.passive && r.passive.rel && r.passive.speechSec>=8) learned={ rel:r.passive.rel, sec:r.passive.speechSec };
+  if(++mic.n % 4 === 0){                                     // ~5 UI/audio updates per second
+    if(state.adaptOn && state.playing){ applyEqGains(.3); applyVolume(); requestPaint(); }
+    paintIntrusion(); paintLearn();
   }
-  det.score = det.score*.8 + maxScore*.2;
-  if(++det.n % 5 === 0){ applyEqGains(.3); applyVolume(); paintIntrusion(); requestPaint(); }
 }
 function paintIntrusion(){
-  const top=Math.max(...adapt);
-  if(!state.adaptOn){ intrOut.textContent = state.adaptPref ? 'se activa al reproducir' : 'apagado'; intrBar.style.width='0%'; return; }
-  intrBar.style.width=Math.round(det.score*100)+'%';
-  intrOut.textContent = top>.4 ? 'cubriendo · +'+top.toFixed(1)+' dB' : det.score>.15 ? 'voces detectadas' : 'ambiente estable';
+  const r=mic.last, top=Math.max(...adapt);
+  if(!state.adaptOn){
+    intrOut.textContent = cal.active ? 'calibrando' : state.adaptPref ? 'se activa al reproducir' : 'apagado';
+    intrBar.style.width = (cal.active && r) ? Math.round(r.p*100)+'%' : '0%';
+    return;
+  }
+  if(!r){ intrOut.textContent='escuchando…'; intrBar.style.width='0%'; return; }
+  intrBar.style.width=Math.round(r.p*100)+'%';
+  intrOut.textContent =
+      r.speech ? (top>.4 ? 'voz · cubriendo +'+top.toFixed(1)+' dB' : 'voz detectada')
+    : r.hold   ? 'pausa entre frases · sostiene'
+    : top>.4   ? 'bajando · +'+top.toFixed(1)+' dB'
+    : 'sin voces';
 }
 async function setAdaptive(on,silent){
   state.adaptPref=on; store.set('adapt',on); setSwitch(adaptSw,on);
   if(on && state.playing){
-    if(await micOpen()){ state.adaptOn=true; det.floor=null; det.hist=BANDS.map(()=>[]); if(!silent) toast('Modo adaptativo activo'); setStatus(playingStatus()); }
+    if(await micOpen()){ state.adaptOn=true; detPost({type:'enable',on:true}); if(!silent) toast('Modo adaptativo activo'); if(!cal.active) setStatus(playingStatus()); }
     else { state.adaptPref=false; store.set('adapt',false); setSwitch(adaptSw,false); }
   } else if(!on){
-    state.adaptOn=false;
+    state.adaptOn=false; detPost({type:'enable',on:false});
     adapt=[0,0,0,0,0]; applyEqGains(1.5); applyVolume(); requestPaint();
     if(!cal.active) micClose();
-    if(state.playing) setStatus(playingStatus());
+    if(state.playing && !cal.active) setStatus(playingStatus());
   } else if(!silent){
     toast('El modo adaptativo se activará al reproducir');
   }
   paintIntrusion();
 }
+
+/* Masker power per octave band (current mode, before the shield), relative to its mean */
+function maskerRel(){
+  const v=BANDS.map(fc=>{ let s=0; for(let i=0;i<GRID.length;i++){ const f=GRID[i]; if(f>=fc/Math.SQRT2 && f<fc*Math.SQRT2) s+=mixPSD(f,state.mode)*DF[i]; } return 10*Math.log10(s); });
+  const m=v.reduce((a,b)=>a+b,0)/5; return v.map(x=>x-m);
+}
+/* Shield gains from the intrusion spectrum: tilt the masker toward the shape of the voices that get in.
+   Bands where no voice was found (−15) end up cut: nothing to mask there, less noise in your ears. */
+function gainsFromIntrusion(rel){
+  const M=maskerRel(), voiced=rel.map(v=>v>-14.9);
+  const raw=rel.map((v,i)=>.8*v-M[i]), vs=raw.filter((v,i)=>voiced[i]);
+  const m=vs.reduce((a,b)=>a+b,0)/Math.max(1,vs.length);
+  return raw.map((v,i)=>voiced[i] ? clamp(v-m+1,-6,6) : -4);
+}
+function describeRel(rel){
+  const voiced=rel.map((v,i)=>[v,i]).filter(x=>x[0]>-14.9);
+  const top=voiced.slice().sort((a,b)=>b[0]-a[0]).slice(0,2).map(x=>BAND_NAME[x[1]]);
+  const none=rel.map((v,i)=>v<=-14.9?BAND_NAME[i]:null).filter(Boolean);
+  let t='Las voces llegan sobre todo en '+top.join(' y ')+'.';
+  if(none.length) t+=' En '+none.join(' y ')+' no se detectó voz, así que el escudo baja ahí.';
+  return t;
+}
 async function calibrate(){
   if(cal.active) return;
   calBtn.disabled=true; calBtn.textContent='ABRIENDO MICRÓFONO…';
-  if(!(await micOpen())){ calBtn.disabled=false; calBtn.textContent='CALIBRAR · 15 S'; return; }
-  cal.active=true; cal.t0=performance.now(); cal.samples=[];
-  duck.gain.setTargetAtTime(0, ctx.currentTime, .15);         // silence our own noise so the mic hears only the room
+  if(!(await micOpen())){ calBtn.disabled=false; calBtn.textContent='CALIBRAR'; return; }
+  cal.active=true;
+  duck.gain.setTargetAtTime(0, ctx.currentTime, .15);       // silence our own noise so the mic hears only the room
+  detPost({type:'cal-start', maxSec:CAL_MAX_S, needSec:CAL_NEED_S});
   calBtn.textContent='ESCUCHANDO…'; calNote.classList.remove('warn');
   calNote.textContent='Escuchando la sala. Deja el teléfono quieto, cerca de donde trabajas.';
   if(state.playing) setStatus('calibrando');
+  clearTimeout(cal.guard);
+  cal.guard=setTimeout(()=>{ if(cal.active) endCal(null,'El detector no respondió. Vuelve a intentarlo con la pantalla encendida.'); },(CAL_MAX_S+8)*1000);
+  paintIntrusion();
 }
-function calStep(L){
-  cal.samples.push(L);
-  const p=clamp((performance.now()-cal.t0)/CAL_MS,0,1);
-  calBar.style.width=(p*100)+'%';
-  if(p>=1) finishCal();
+function calProgress(c){
+  if(!cal.active) return;
+  calBar.style.width=Math.round(clamp(Math.max(c.t/c.max, c.speechSec/c.need),0,1)*100)+'%';
+  if(!c.done) calNote.textContent='Escuchando la sala · '+c.speechSec.toFixed(1)+' s de voz reconocida de '+c.need+' s.';
+  else endCal(c);
 }
-function finishCal(){
-  cal.active=false;
-  duck.gain.setTargetAtTime(1, ctx.currentTime, .6);
-  calBtn.disabled=false; calBtn.textContent='CALIBRAR · 15 S';
+function endCal(c,errMsg){
+  if(!cal.active) return;
+  cal.active=false; clearTimeout(cal.guard);
+  if(duck) duck.gain.setTargetAtTime(1, ctx.currentTime, .6);
+  calBtn.disabled=false; calBtn.textContent='CALIBRAR';
   setTimeout(()=>{ calBar.style.width='0%'; },900);
-  const S=cal.samples, n=S.length;
-  if(n<40){ calNote.textContent='La medición se interrumpió. Inténtalo de nuevo con la pantalla encendida.'; calNote.classList.add('warn'); }
-  else{
-    const p20=[], act=[];
-    for(let i=0;i<5;i++){
-      const v=S.map(r=>r[i]).sort((a,b)=>a-b), base=v[Math.floor(n*.2)];
-      p20.push(base);
-      act.push(v.reduce((s,x)=>s+Math.max(0,x-base),0)/n);   // intermittent energy above the steady floor
-    }
-    const maxA=Math.max(...act);
-    if(maxA<1.2){
-      calNote.textContent='No se detectaron voces en estos 15 s. Repite la calibración mientras la conversación esté ocurriendo.';
-      calNote.classList.add('warn');
-    } else {
-      // Shape relative to the average band: the dominant bands go up, the rest stay near neutral
-      const r=act.map(a=>a/maxA), mr=r.reduce((x,y)=>x+y,0)/5;
-      const gains=r.map(v=>clamp(2+9*(v-mr),-4,6));
-      setEq(gains,'cal');
-      state.calEq=state.eq.slice(); store.set('calEq',state.calEq);
-      const top=act.map((a,i)=>[a,i]).sort((a,b)=>b[0]-a[0]).slice(0,2).map(x=>BAND_NAME[x[1]]);
-      calNote.textContent='Listo. Las voces de tu sala se concentran en '+top.join(' y ')+'; el escudo las refuerza. Puedes volver a este ajuste con «Calibrado».';
-      calNote.classList.remove('warn');
-      toast('Escudo calibrado para esta sala');
-    }
-    if(state.adaptOn){ det.floor=p20.slice(); det.hist=BANDS.map(()=>[]); }
+  if(!c){
+    detPost({type:'cal-cancel'});
+    calNote.textContent=errMsg||'Calibración cancelada.'; calNote.classList.add('warn');
+  } else if(!c.rel || c.speechSec<2){
+    calNote.textContent='En '+Math.round(c.t)+' s solo se reconocieron '+c.speechSec.toFixed(1)+' s de voz. Repite la calibración mientras la conversación esté ocurriendo.';
+    calNote.classList.add('warn');
+  } else {
+    setEq(gainsFromIntrusion(c.rel),'cal');
+    state.calEq=state.eq.slice(); store.set('calEq',state.calEq); learnQuietUntil=performance.now()+3*60e3;
+    const conf = c.speechSec>=8 ? 'alta' : c.speechSec>=5 ? 'media' : 'baja';
+    calNote.textContent='Listo: '+c.speechSec.toFixed(1)+' s de voz, confianza '+conf+'. '+describeRel(c.rel)+' Puedes volver a este ajuste con «Calibrado».';
+    calNote.classList.remove('warn');
+    toast('Escudo calibrado para esta sala');
   }
   if(state.playing) setStatus(playingStatus());
   if(!state.adaptOn) micClose();
-  requestPaint();
+  paintIntrusion(); requestPaint();
 }
+let learnQuietUntil=0;        // after a calibration or applying a suggestion, wait before suggesting again
+function paintLearn(){
+  if(!learned || learned.sec<20 || cal.active || performance.now()<learnQuietUntil){ learnRow.hidden=true; return; }
+  const g=gainsFromIntrusion(learned.rel);
+  const diff=Math.max(...g.map((v,i)=>Math.abs(Math.round(v*2)/2-state.eq[i])));
+  if(diff<2){ learnRow.hidden=true; return; }
+  learnTxt.textContent='Aprendido mientras sonaba: '+Math.round(learned.sec)+' s de voz. '+describeRel(learned.rel);
+  learnRow.hidden=false;
+}
+learnBtn.addEventListener('click',()=>{
+  if(!learned) return;
+  setEq(gainsFromIntrusion(learned.rel),'cal');
+  state.calEq=state.eq.slice(); store.set('calEq',state.calEq);
+  learnRow.hidden=true; learnQuietUntil=performance.now()+3*60e3; toast('Escudo ajustado con lo aprendido');
+});
 
 /* ---------------- Android: media session + wake lock ---------------- */
 // A silent looping <audio> gives Chrome a media session: lock-screen / notification controls,
@@ -1462,8 +1723,8 @@ function stop(){
   state.playing=false;
   document.body.classList.remove('playing'); playBtn.setAttribute('aria-label','Reproducir');
   flagTitle(false); setStatus('bajando');
-  if(cal.active){ cal.samples=[]; finishCal(); }
-  if(state.adaptOn){ state.adaptOn=false; adapt=[0,0,0,0,0]; applyEqGains(.5); micClose(); paintIntrusion(); requestPaint(); }
+  if(cal.active) endCal(null,'Calibración cancelada al pausar.');
+  if(state.adaptOn){ state.adaptOn=false; detPost({type:'enable',on:false}); adapt=[0,0,0,0,0]; applyEqGains(.5); micClose(); paintIntrusion(); requestPaint(); }
   const t=ctx.currentTime;
   master.gain.cancelScheduledValues(t);
   master.gain.setValueAtTime(master.gain.value, t);
@@ -1514,8 +1775,10 @@ blendRange.addEventListener('input',()=>{
 calBtn.addEventListener('click', calibrate);
 adaptSw.addEventListener('click',()=>setAdaptive(!state.adaptPref));
 $$('.chip[data-s]').forEach(c=>c.addEventListener('click',()=>{
+  if(!sensOk(c.dataset.s)) return;
   state.sens=c.dataset.s; store.set('sens',state.sens);
   $$('.chip[data-s]').forEach(x=>x.classList.toggle('active',x===c));
+  detPost({type:'params', params:paramsFor(state.sens)});
 }));
 texSw.addEventListener('click',()=>{
   state.texture=!state.texture; store.set('texture',state.texture); setSwitch(texSw,state.texture); lifeNext=0;
@@ -1664,6 +1927,7 @@ blendRange.value=state.vblend; paintRange(blendRange); blendOut.textContent=stat
 volRange.value=state.vol; paintRange(volRange);
 warmRange.value=state.warm; paintRange(warmRange); applyWarmth();
 setSwitch(adaptSw,state.adaptPref); setSwitch(texSw,state.texture); setSwitch(wakeSw,state.wake);
+customChip.hidden=!customParams();
 $$('.chip[data-s]').forEach(c=>c.classList.toggle('active',c.dataset.s===state.sens));
 if(state.timer>0){ state.total=state.timer*60; state.remaining=state.timer*60; showRing(true); cdOut.textContent=fmt(state.timer*60)+' restantes'; }
 updateChips(); paintEq(); paintOffice(); paintIntrusion();
